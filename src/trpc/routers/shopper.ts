@@ -12,6 +12,81 @@ export const shopperRouter = createTRPCRouter({
       });
     }),
 
+    // Get user's enabled supermarkets (returns all supermarkets with enabled flag)
+    getUserPreferences: protectedProcedure.query(async ({ ctx }) => {
+      const supermarkets = await ctx.db.supermarket.findMany({
+        orderBy: { name: 'asc' },
+      });
+
+      const userPrefs = await ctx.db.userSupermarket.findMany({
+        where: { userId: ctx.userId },
+        select: { supermarketId: true },
+      });
+
+      const enabledIds = new Set(userPrefs.map((p) => p.supermarketId));
+
+      // If user has no preferences, all supermarkets are enabled by default
+      const hasPreferences = enabledIds.size > 0;
+
+      return supermarkets.map((s) => ({
+        ...s,
+        enabled: hasPreferences ? enabledIds.has(s.id) : true,
+      }));
+    }),
+
+    // Toggle a supermarket preference
+    togglePreference: protectedProcedure
+      .input(z.object({ supermarketId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const existing = await ctx.db.userSupermarket.findUnique({
+          where: {
+            userId_supermarketId: {
+              userId: ctx.userId,
+              supermarketId: input.supermarketId,
+            },
+          },
+        });
+
+        if (existing) {
+          // Remove preference (disable this supermarket)
+          await ctx.db.userSupermarket.delete({
+            where: { id: existing.id },
+          });
+          return { enabled: false };
+        } else {
+          // Check if user has any preferences set
+          const userPrefs = await ctx.db.userSupermarket.findMany({
+            where: { userId: ctx.userId },
+          });
+
+          if (userPrefs.length === 0) {
+            // First time setting preferences - enable all OTHER supermarkets first
+            const allSupermarkets = await ctx.db.supermarket.findMany();
+            for (const s of allSupermarkets) {
+              if (s.id !== input.supermarketId) {
+                await ctx.db.userSupermarket.create({
+                  data: {
+                    userId: ctx.userId,
+                    supermarketId: s.id,
+                  },
+                });
+              }
+            }
+            // The clicked one is now disabled (not in the table)
+            return { enabled: false };
+          }
+
+          // Add preference (enable this supermarket)
+          await ctx.db.userSupermarket.create({
+            data: {
+              userId: ctx.userId,
+              supermarketId: input.supermarketId,
+            },
+          });
+          return { enabled: true };
+        }
+      }),
+
     // Seed supermarkets if they don't exist
     seed: protectedProcedure.mutation(async ({ ctx }) => {
       const supermarkets = [
@@ -94,12 +169,61 @@ export const shopperRouter = createTRPCRouter({
       }),
 
     all: protectedProcedure
-      .input(z.object({ query: z.string().min(2) }))
-      .query(async ({ input }) => {
-        const [ahResult, jumboResult] = await Promise.all([
-          albertHeijn.searchProducts(input.query, 0, 10),
-          jumbo.searchProducts(input.query, 0, 10),
-        ]);
+      .input(
+        z.object({
+          query: z.string().min(2),
+          supermarkets: z.array(z.enum(['Albert Heijn', 'Jumbo'])).optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        // Get user preferences if no explicit filter provided
+        let enabledSupermarkets = input.supermarkets;
+
+        if (!enabledSupermarkets) {
+          const supermarkets = await ctx.db.supermarket.findMany();
+          const userPrefs = await ctx.db.userSupermarket.findMany({
+            where: { userId: ctx.userId },
+            select: { supermarketId: true },
+          });
+
+          if (userPrefs.length > 0) {
+            const enabledIds = new Set(userPrefs.map((p) => p.supermarketId));
+            enabledSupermarkets = supermarkets
+              .filter((s) => enabledIds.has(s.id))
+              .map((s) => s.name as 'Albert Heijn' | 'Jumbo');
+          } else {
+            // Default to all
+            enabledSupermarkets = ['Albert Heijn', 'Jumbo'];
+          }
+        }
+
+        const searchPromises: Promise<typeof ahResult | typeof jumboResult>[] = [];
+        let ahResult = {
+          products: [] as Awaited<ReturnType<typeof albertHeijn.searchProducts>>['products'],
+        };
+        let jumboResult = {
+          products: [] as Awaited<ReturnType<typeof jumbo.searchProducts>>['products'],
+        };
+
+        if (enabledSupermarkets.includes('Albert Heijn')) {
+          searchPromises.push(
+            albertHeijn.searchProducts(input.query, 0, 10).then((r) => {
+              ahResult = r;
+              return r;
+            })
+          );
+        }
+
+        if (enabledSupermarkets.includes('Jumbo')) {
+          searchPromises.push(
+            jumbo.searchProducts(input.query, 0, 10).then((r) => {
+              jumboResult = r;
+              return r;
+            })
+          );
+        }
+
+        await Promise.all(searchPromises);
 
         const products = [
           ...ahResult.products.map((p) => ({

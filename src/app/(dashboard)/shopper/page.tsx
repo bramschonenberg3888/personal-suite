@@ -1,17 +1,30 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { trpc } from '@/trpc/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ProductSearch } from '@/components/shopper/product-search';
 import { TrackedProductCard } from '@/components/shopper/tracked-product-card';
-import { RefreshCw, Bell, ShoppingCart } from 'lucide-react';
+import { SupermarketFilter } from '@/components/shopper/supermarket-filter';
+import { RefreshCw, Bell, ShoppingCart, ArrowUpDown, Filter } from 'lucide-react';
+
+type SortOption = 'date' | 'name' | 'price-asc' | 'price-desc' | 'supermarket';
+type FilterOption = 'all' | 'Albert Heijn' | 'Jumbo';
 
 export default function ShopperPage() {
   const utils = trpc.useUtils();
+  const [sortBy, setSortBy] = useState<SortOption>('date');
+  const [filterBy, setFilterBy] = useState<FilterOption>('all');
 
   // Seed supermarkets on first load
   const seedMutation = trpc.shopper.supermarket.seed.useMutation();
@@ -23,6 +36,42 @@ export default function ShopperPage() {
 
   const { data: trackedProducts, isLoading: trackedLoading } =
     trpc.shopper.tracked.getAll.useQuery();
+
+  // Get unique supermarkets from tracked products for filter options
+  const availableSupermarkets = useMemo(() => {
+    if (!trackedProducts) return [];
+    const supermarkets = new Set(trackedProducts.map((t) => t.product.supermarket.name));
+    return Array.from(supermarkets);
+  }, [trackedProducts]);
+
+  // Filter and sort tracked products
+  const sortedAndFilteredProducts = useMemo(() => {
+    if (!trackedProducts) return [];
+
+    let filtered = trackedProducts;
+
+    // Apply filter
+    if (filterBy !== 'all') {
+      filtered = filtered.filter((t) => t.product.supermarket.name === filterBy);
+    }
+
+    // Apply sort
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.product.name.localeCompare(b.product.name);
+        case 'price-asc':
+          return a.product.currentPrice - b.product.currentPrice;
+        case 'price-desc':
+          return b.product.currentPrice - a.product.currentPrice;
+        case 'supermarket':
+          return a.product.supermarket.name.localeCompare(b.product.supermarket.name);
+        case 'date':
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+  }, [trackedProducts, sortBy, filterBy]);
 
   const { data: alerts } = trpc.shopper.alerts.getActive.useQuery();
 
@@ -140,19 +189,68 @@ export default function ShopperPage() {
               ))}
             </div>
           ) : trackedProducts && trackedProducts.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {trackedProducts.map((tracked) => (
-                <TrackedProductCard
-                  key={tracked.id}
-                  trackedProduct={tracked}
-                  onUntrack={(id) => untrackProduct.mutate({ id })}
-                  onSetTargetPrice={(id, price) =>
-                    setTargetPrice.mutate({ id, targetPrice: price })
-                  }
-                  isRemoving={untrackProduct.isPending}
-                />
-              ))}
-            </div>
+            <>
+              {/* Sort and Filter Controls */}
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+                  <Select value={sortBy} onValueChange={(v: string) => setSortBy(v as SortOption)}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="date">Date Added</SelectItem>
+                      <SelectItem value="name">Name</SelectItem>
+                      <SelectItem value="price-asc">Price: Low to High</SelectItem>
+                      <SelectItem value="price-desc">Price: High to Low</SelectItem>
+                      <SelectItem value="supermarket">Supermarket</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {availableSupermarkets.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-muted-foreground" />
+                    <Select
+                      value={filterBy}
+                      onValueChange={(v: string) => setFilterBy(v as FilterOption)}
+                    >
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue placeholder="Filter by store" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Stores</SelectItem>
+                        {availableSupermarkets.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {filterBy !== 'all' && (
+                  <span className="text-sm text-muted-foreground">
+                    Showing {sortedAndFilteredProducts.length} of {trackedProducts.length} products
+                  </span>
+                )}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {sortedAndFilteredProducts.map((tracked) => (
+                  <TrackedProductCard
+                    key={tracked.id}
+                    trackedProduct={tracked}
+                    onUntrack={(id) => untrackProduct.mutate({ id })}
+                    onSetTargetPrice={(id, price) =>
+                      setTargetPrice.mutate({ id, targetPrice: price })
+                    }
+                    isRemoving={untrackProduct.isPending}
+                  />
+                ))}
+              </div>
+            </>
           ) : (
             <Card>
               <CardContent className="py-8 text-center">
@@ -168,7 +266,8 @@ export default function ShopperPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="search" className="mt-4">
+        <TabsContent value="search" className="space-y-4 mt-4">
+          <SupermarketFilter />
           <ProductSearch onTrack={handleTrack} isTracking={trackProduct.isPending} />
         </TabsContent>
       </Tabs>

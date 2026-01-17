@@ -1,4 +1,4 @@
-import { WatchlistView } from '@/components/portfolio/watchlist-view';
+import { PortfolioView } from '@/components/portfolio/portfolio-view';
 
 export default function PortfolioPage() {
   return (
@@ -8,7 +8,7 @@ export default function PortfolioPage() {
         <p className="text-muted-foreground">Track your stocks and ETFs</p>
       </div>
 
-      <WatchlistView />
+      <PortfolioView />
     </div>
   );
 }

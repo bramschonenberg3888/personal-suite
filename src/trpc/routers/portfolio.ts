@@ -1,51 +1,27 @@
 import { z } from 'zod';
-import { createTRPCRouter, protectedProcedure } from '../init';
-import { getQuotes, searchSecurities, getHistoricalData, getNews } from '@/lib/api/yahoo-finance';
+import { createTRPCRouter, protectedProcedure, baseProcedure } from '../init';
+import {
+  getQuotes,
+  searchSecurities,
+  getHistoricalData,
+  getNews,
+  getQuoteSummary,
+} from '@/lib/api/yahoo-finance';
+import { mapIsin, getBestTicker, isValidIsin } from '@/lib/api/openfigi';
 
 export const portfolioRouter = createTRPCRouter({
-  // Watchlist management
-  watchlist: createTRPCRouter({
+  // Portfolio items management
+  items: createTRPCRouter({
     getAll: protectedProcedure.query(async ({ ctx }) => {
-      return ctx.db.watchlist.findMany({
+      return ctx.db.portfolioItem.findMany({
         where: { userId: ctx.userId },
-        include: {
-          items: {
-            orderBy: { createdAt: 'desc' },
-          },
-        },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
       });
     }),
 
-    create: protectedProcedure
-      .input(z.object({ name: z.string().min(1).max(100) }))
-      .mutation(async ({ ctx, input }) => {
-        return ctx.db.watchlist.create({
-          data: {
-            name: input.name,
-            userId: ctx.userId,
-          },
-          include: {
-            items: true,
-          },
-        });
-      }),
-
-    delete: protectedProcedure
-      .input(z.object({ id: z.string() }))
-      .mutation(async ({ ctx, input }) => {
-        return ctx.db.watchlist.delete({
-          where: {
-            id: input.id,
-            userId: ctx.userId,
-          },
-        });
-      }),
-
-    addItem: protectedProcedure
+    add: protectedProcedure
       .input(
         z.object({
-          watchlistId: z.string(),
           isin: z.string(),
           symbol: z.string(),
           name: z.string(),
@@ -54,21 +30,9 @@ export const portfolioRouter = createTRPCRouter({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        // Verify the watchlist belongs to the user
-        const watchlist = await ctx.db.watchlist.findFirst({
-          where: {
-            id: input.watchlistId,
-            userId: ctx.userId,
-          },
-        });
-
-        if (!watchlist) {
-          throw new Error('Watchlist not found');
-        }
-
-        return ctx.db.watchlistItem.create({
+        return ctx.db.portfolioItem.create({
           data: {
-            watchlistId: input.watchlistId,
+            userId: ctx.userId,
             isin: input.isin,
             symbol: input.symbol,
             name: input.name,
@@ -78,21 +42,14 @@ export const portfolioRouter = createTRPCRouter({
         });
       }),
 
-    removeItem: protectedProcedure
-      .input(z.object({ itemId: z.string() }))
+    remove: protectedProcedure
+      .input(z.object({ id: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        // Verify the item belongs to a watchlist owned by the user
-        const item = await ctx.db.watchlistItem.findFirst({
-          where: { id: input.itemId },
-          include: { watchlist: true },
-        });
-
-        if (!item || item.watchlist.userId !== ctx.userId) {
-          throw new Error('Item not found');
-        }
-
-        return ctx.db.watchlistItem.delete({
-          where: { id: input.itemId },
+        return ctx.db.portfolioItem.delete({
+          where: {
+            id: input.id,
+            userId: ctx.userId,
+          },
         });
       }),
   }),
@@ -106,11 +63,9 @@ export const portfolioRouter = createTRPCRouter({
         return getQuotes(input.symbols);
       }),
 
-    search: protectedProcedure
-      .input(z.object({ query: z.string().min(1) }))
-      .query(async ({ input }) => {
-        return searchSecurities(input.query);
-      }),
+    search: baseProcedure.input(z.object({ query: z.string().min(1) })).query(async ({ input }) => {
+      return searchSecurities(input.query);
+    }),
 
     getHistory: protectedProcedure
       .input(
@@ -123,6 +78,51 @@ export const portfolioRouter = createTRPCRouter({
         const period1 = new Date();
         period1.setDate(period1.getDate() - input.days);
         return getHistoricalData(input.symbol, period1);
+      }),
+
+    lookupIsin: baseProcedure.input(z.object({ isin: z.string() })).query(async ({ input }) => {
+      if (!isValidIsin(input.isin)) {
+        throw new Error('Invalid ISIN format. Must be 2 letters + 9 alphanumeric + 1 check digit.');
+      }
+
+      const mappings = await mapIsin(input.isin);
+
+      if (mappings.length === 0) {
+        throw new Error('No securities found for this ISIN.');
+      }
+
+      const bestMatch = getBestTicker(mappings);
+
+      if (!bestMatch) {
+        throw new Error('Could not determine best ticker for ISIN.');
+      }
+
+      // Try to get quote data for currency, but don't fail if it doesn't work
+      let currency = 'USD';
+      try {
+        const quotes = await getQuotes([bestMatch.ticker]);
+        if (quotes[0]?.currency) {
+          currency = quotes[0].currency;
+        }
+      } catch {
+        // Use default currency if quote fetch fails
+      }
+
+      return {
+        isin: input.isin.toUpperCase(),
+        symbol: bestMatch.ticker,
+        name: bestMatch.name,
+        exchange: bestMatch.exchCode,
+        securityType: bestMatch.securityType,
+        currency,
+        allMappings: mappings,
+      };
+    }),
+
+    getSummary: protectedProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        return getQuoteSummary(input.symbol);
       }),
   }),
 

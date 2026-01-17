@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createTRPCRouter, protectedProcedure } from '../init';
+import { createTRPCRouter, baseProcedure, protectedProcedure } from '../init';
 import * as openMeteo from '@/lib/api/open-meteo';
 
 export const weatherRouter = createTRPCRouter({
@@ -39,11 +39,9 @@ export const weatherRouter = createTRPCRouter({
         });
       }),
 
-    search: protectedProcedure
-      .input(z.object({ query: z.string().min(2) }))
-      .query(async ({ input }) => {
-        return openMeteo.searchLocations(input.query);
-      }),
+    search: baseProcedure.input(z.object({ query: z.string().min(2) })).query(async ({ input }) => {
+      return openMeteo.searchLocations(input.query);
+    }),
   }),
 
   // Weather data

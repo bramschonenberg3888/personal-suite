@@ -74,8 +74,10 @@ Features are isolated for parallel Claude Code sessions. Each feature has its ow
 After editing ANY file, run:
 
 ```bash
-bun run lint && bun run type-check
+bun run lint && bun run type-check && bun run format:check
 ```
+
+To auto-fix formatting: `bun run format`
 
 Fix ALL errors/warnings before continuing.
 

@@ -54,6 +54,66 @@ export interface NewsItem {
   relatedTickers?: string[];
 }
 
+export interface QuoteSummary {
+  // Basic info
+  symbol: string;
+  shortName: string;
+  longName?: string;
+  currency: string;
+  exchange: string;
+  quoteType: string;
+
+  // Current price data
+  regularMarketPrice: number;
+  regularMarketChange: number;
+  regularMarketChangePercent: number;
+  regularMarketPreviousClose: number;
+  regularMarketOpen?: number;
+  regularMarketDayHigh?: number;
+  regularMarketDayLow?: number;
+  regularMarketVolume?: number;
+
+  // Extended price stats
+  fiftyTwoWeekHigh?: number;
+  fiftyTwoWeekLow?: number;
+  fiftyDayAverage?: number;
+  twoHundredDayAverage?: number;
+  fiftyDayAverageChange?: number;
+  fiftyDayAverageChangePercent?: number;
+  twoHundredDayAverageChange?: number;
+  twoHundredDayAverageChangePercent?: number;
+
+  // Fundamentals
+  marketCap?: number;
+  trailingPE?: number;
+  forwardPE?: number;
+  priceToBook?: number;
+  dividendYield?: number;
+  dividendRate?: number;
+  beta?: number;
+  trailingAnnualDividendYield?: number;
+
+  // Company info
+  sector?: string;
+  industry?: string;
+  fullTimeEmployees?: number;
+  website?: string;
+  longBusinessSummary?: string;
+  city?: string;
+  country?: string;
+
+  // Volume stats
+  averageVolume?: number;
+  averageVolume10days?: number;
+}
+
+const DEFAULT_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  Accept: 'application/json',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+
 async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
@@ -65,6 +125,10 @@ async function fetchWithTimeout(
   try {
     const response = await fetch(url, {
       ...options,
+      headers: {
+        ...DEFAULT_HEADERS,
+        ...options.headers,
+      },
       signal: controller.signal,
     });
     clearTimeout(id);
@@ -209,4 +273,84 @@ export async function getNews(symbols: string[]): Promise<NewsItem[]> {
       relatedTickers: item.relatedTickers as string[] | undefined,
     })
   );
+}
+
+export async function getQuoteSummary(symbol: string): Promise<QuoteSummary> {
+  const modules = 'price,summaryDetail,defaultKeyStatistics,assetProfile';
+  const url = `${BASE_URL}/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
+
+  const response = await fetchWithTimeout(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch quote summary: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const result = data?.quoteSummary?.result?.[0];
+
+  if (!result) {
+    throw new Error(`No data found for symbol: ${symbol}`);
+  }
+
+  const price = result.price || {};
+  const summaryDetail = result.summaryDetail || {};
+  const keyStats = result.defaultKeyStatistics || {};
+  const profile = result.assetProfile || {};
+
+  // Helper to extract raw value from Yahoo Finance format
+  const getRaw = (obj: Record<string, unknown> | undefined): number | undefined => {
+    if (!obj) return undefined;
+    return (obj.raw as number) ?? undefined;
+  };
+
+  return {
+    // Basic info
+    symbol: (price.symbol as string) || symbol,
+    shortName: (price.shortName as string) || symbol,
+    longName: price.longName as string | undefined,
+    currency: (price.currency as string) || 'USD',
+    exchange: (price.exchangeName as string) || '',
+    quoteType: (price.quoteType as string) || 'EQUITY',
+
+    // Current price data
+    regularMarketPrice: getRaw(price.regularMarketPrice) || 0,
+    regularMarketChange: getRaw(price.regularMarketChange) || 0,
+    regularMarketChangePercent: (getRaw(price.regularMarketChangePercent) || 0) * 100,
+    regularMarketPreviousClose: getRaw(price.regularMarketPreviousClose) || 0,
+    regularMarketOpen: getRaw(price.regularMarketOpen),
+    regularMarketDayHigh: getRaw(price.regularMarketDayHigh),
+    regularMarketDayLow: getRaw(price.regularMarketDayLow),
+    regularMarketVolume: getRaw(price.regularMarketVolume),
+
+    // Extended price stats
+    fiftyTwoWeekHigh: getRaw(summaryDetail.fiftyTwoWeekHigh),
+    fiftyTwoWeekLow: getRaw(summaryDetail.fiftyTwoWeekLow),
+    fiftyDayAverage: getRaw(summaryDetail.fiftyDayAverage),
+    twoHundredDayAverage: getRaw(summaryDetail.twoHundredDayAverage),
+    fiftyDayAverageChange: getRaw(keyStats.fiftyTwoWeekChange),
+    twoHundredDayAverageChange: getRaw(keyStats['52WeekChange']),
+
+    // Fundamentals
+    marketCap: getRaw(price.marketCap),
+    trailingPE: getRaw(summaryDetail.trailingPE),
+    forwardPE: getRaw(summaryDetail.forwardPE),
+    priceToBook: getRaw(keyStats.priceToBook),
+    dividendYield: getRaw(summaryDetail.dividendYield),
+    dividendRate: getRaw(summaryDetail.dividendRate),
+    beta: getRaw(summaryDetail.beta),
+    trailingAnnualDividendYield: getRaw(summaryDetail.trailingAnnualDividendYield),
+
+    // Company info
+    sector: profile.sector as string | undefined,
+    industry: profile.industry as string | undefined,
+    fullTimeEmployees: profile.fullTimeEmployees as number | undefined,
+    website: profile.website as string | undefined,
+    longBusinessSummary: profile.longBusinessSummary as string | undefined,
+    city: profile.city as string | undefined,
+    country: profile.country as string | undefined,
+
+    // Volume stats
+    averageVolume: getRaw(summaryDetail.averageVolume),
+    averageVolume10days: getRaw(summaryDetail.averageVolume10days),
+  };
 }

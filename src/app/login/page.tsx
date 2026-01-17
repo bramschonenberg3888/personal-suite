@@ -5,8 +5,12 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+
+// Dev credentials for quick login
+const DEV_EMAIL = 'test@example.com';
+const DEV_PASSWORD = 'password123';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,6 +40,26 @@ export default function LoginPage() {
     }
   };
 
+  const handleDevLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    const result = await signIn('credentials', {
+      email: DEV_EMAIL,
+      password: DEV_PASSWORD,
+      redirect: false,
+    });
+
+    setLoading(false);
+
+    if (result?.error) {
+      setError('Dev login failed');
+    } else {
+      router.push('/');
+      router.refresh();
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -43,10 +67,32 @@ export default function LoginPage() {
           <CardTitle className="text-2xl font-bold">Personal Suite</CardTitle>
           <CardDescription>Sign in to access your dashboard</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Dev Quick Login */}
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            onClick={handleDevLogin}
+            disabled={loading}
+          >
+            {loading ? 'Signing in...' : 'Quick Dev Login (test@example.com)'}
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <Separator className="w-full" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <label htmlFor="email" className="text-sm font-medium">
+                Email
+              </label>
               <Input
                 id="email"
                 type="email"
@@ -57,7 +103,9 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <label htmlFor="password" className="text-sm font-medium">
+                Password
+              </label>
               <Input
                 id="password"
                 type="password"

@@ -28,10 +28,18 @@ export interface JumboSearchResponse {
   totalCount: number;
 }
 
+// Jumbo API headers mimicking their mobile app
+const JUMBO_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+  Accept: 'application/json',
+  'Accept-Language': 'nl-NL,nl;q=0.9',
+};
+
 async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
-  timeout = 10000
+  timeout = 15000
 ): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
@@ -41,8 +49,7 @@ async function fetchWithTimeout(
       ...options,
       signal: controller.signal,
       headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'PersonalSuite/1.0',
+        ...JUMBO_HEADERS,
         ...options.headers,
       },
     });

@@ -48,7 +48,7 @@ model User {
   sessions      Session[]
   posts         Post[]
   // Personal Suite relations
-  watchlists      Watchlist[]
+  portfolioItems  PortfolioItem[]
   drawings        Drawing[]
   libraries       ExcalidrawLibrary[]
   trackedProducts TrackedProduct[]
@@ -77,30 +77,19 @@ model Post {
 }
 
 // ===== PORTFOLIO TRACKER =====
-model Watchlist {
-  id        String          @id @default(cuid())
-  name      String          @default("Default")
+model PortfolioItem {
+  id        String   @id @default(cuid())
   userId    String
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items     WatchlistItem[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isin      String
+  symbol    String
+  name      String
+  exchange  String
+  currency  String
+  createdAt DateTime @default(now())
 
-  @@unique([userId, name])
-}
-
-model WatchlistItem {
-  id          String    @id @default(cuid())
-  isin        String
-  symbol      String
-  name        String
-  exchange    String
-  currency    String
-  watchlistId String
-  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
-  createdAt   DateTime  @default(now())
-
-  @@unique([watchlistId, isin])
+  @@unique([userId, isin])
+  @@index([userId])
 }
 
 // ===== EXCALIDRAW =====

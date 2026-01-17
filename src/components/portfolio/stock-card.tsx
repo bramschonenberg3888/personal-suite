@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Trash2, TrendingUp, TrendingDown } from 'lucide-react';
@@ -41,7 +42,12 @@ export function StockCard({ item, quote, onRemove, isRemoving }: StockCardProps)
   };
 
   return (
-    <Card className="group relative">
+    <Card className="group relative hover:shadow-md transition-shadow">
+      <Link
+        href={`/portfolio/${encodeURIComponent(item.symbol)}`}
+        className="absolute inset-0 z-0"
+        aria-label={`View ${item.symbol} details`}
+      />
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <div>
@@ -51,8 +57,12 @@ export function StockCard({ item, quote, onRemove, isRemoving }: StockCardProps)
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={() => onRemove(item.id)}
+            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity relative z-10"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onRemove(item.id);
+            }}
             disabled={isRemoving}
           >
             <Trash2 className="h-4 w-4" />
