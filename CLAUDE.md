@@ -1,35 +1,44 @@
-# boilerplate-nextjs-all-options
+# personal-suite
 
-Full-stack Next.js 16 boilerplate with authentication (NextAuth v5), type-safe API (tRPC), database (Prisma + PostgreSQL), and comprehensive testing.
+Personal productivity and financial suite: stock portfolio watchlist (Yahoo Finance), Dutch supermarket price tracking (Albert Heijn & Jumbo), weather forecasts (Open-Meteo), and Excalidraw drawing canvas.
 
 ## Project Structure
 
 ```
 src/
 ├── app/                      # Next.js App Router
-│   ├── api/
-│   │   ├── auth/[...nextauth]/ # NextAuth routes
-│   │   └── trpc/[trpc]/      # tRPC endpoint
-│   ├── layout.tsx            # Root layout with providers
-│   ├── page.tsx              # Homepage
-│   └── globals.css           # Tailwind CSS
+│   ├── (dashboard)/          # Protected dashboard pages
+│   │   ├── portfolio/        # Stock portfolio tracker
+│   │   ├── drawings/         # Excalidraw drawings
+│   │   ├── shopper/          # Supermarket price tracker
+│   │   └── weather/          # Weather forecasts
+│   └── api/
+│       ├── auth/[...nextauth]/ # NextAuth routes
+│       └── trpc/[trpc]/      # tRPC endpoint
+├── components/
+│   ├── ui/                   # Reusable UI (shadcn/ui)
+│   ├── layout/               # App shell, sidebar
+│   ├── portfolio/            # Stock cards, watchlist
+│   ├── drawing/              # Excalidraw wrapper, canvas
+│   ├── shopper/              # Product search, tracking
+│   └── weather/              # Weather display components
 ├── lib/
+│   ├── api/                  # External API clients
+│   │   ├── yahoo-finance.ts  # Stock quotes & news
+│   │   ├── albert-heijn.ts   # AH product search
+│   │   ├── jumbo.ts          # Jumbo product search
+│   │   └── open-meteo.ts     # Weather data
 │   ├── auth.ts               # NextAuth configuration
-│   ├── db.ts                 # Prisma client singleton
-│   └── utils.ts              # Utility functions (cn)
-├── trpc/
-│   ├── init.ts               # tRPC context & router setup
-│   ├── routers/_app.ts       # API procedures
-│   ├── client.tsx            # Client provider
-│   ├── server.tsx            # Server-side caller
-│   └── query-client.ts       # React Query config
-├── types/                    # TypeScript type definitions
-├── env.ts                    # Environment validation (Zod)
-└── generated/                # Prisma generated client
+│   └── db.ts                 # Prisma client singleton
+├── trpc/routers/             # tRPC API procedures
+│   ├── portfolio.ts          # Watchlist & quotes
+│   ├── drawing.ts            # Drawing CRUD & library
+│   ├── shopper.ts            # Product tracking
+│   └── weather.ts            # Location & forecasts
+├── hooks/                    # Custom React hooks
+└── generated/prisma/         # Prisma generated client
 
-prisma/
-└── schema.prisma             # Database schema
-
+prisma/schema.prisma          # Database schema
 __tests__/                    # Unit tests (Vitest)
 tests/                        # E2E tests (Playwright)
 ```
@@ -37,6 +46,7 @@ tests/                        # E2E tests (Playwright)
 ## Organization Rules
 
 **Keep code organized and modularized:**
+
 - API procedures → `src/trpc/routers/`, one router per domain
 - Components → `src/components/`, one component per file
 - Utilities → `src/lib/`, grouped by functionality
@@ -45,10 +55,19 @@ tests/                        # E2E tests (Playwright)
 - E2E tests → `tests/`, one spec per feature
 
 **Modularity principles:**
+
 - Single responsibility per file
 - Clear, descriptive file names
 - Group related functionality together
 - Avoid monolithic files
+
+## Parallel Development
+
+Features are isolated for parallel Claude Code sessions. Each feature has its own page, components, API client, and tRPC router.
+
+**Safe for parallel work:** All feature-specific files (portfolio, drawing, shopper, weather)
+
+**Coordinate changes to:** `src/trpc/routers/_app.ts`, `prisma/schema.prisma`, `src/components/layout/`
 
 ## Code Quality - Zero Tolerance
 
@@ -85,6 +104,7 @@ bun dev                   # Start development server
 ```
 
 If changes require server restart (env vars, next.config.ts):
+
 1. Restart server
 2. Check terminal for errors
 3. Fix ALL warnings before continuing

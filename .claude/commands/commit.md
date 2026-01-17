@@ -4,9 +4,11 @@ description: Run checks, commit with AI message, and push
 ---
 
 1. Run quality checks:
+
    ```bash
    bun run lint && bun run type-check && bun run test:run
    ```
+
    Fix ALL errors before continuing.
 
 2. Review changes: `git status` and `git diff`

@@ -14,6 +14,7 @@ bun run test:run
 ```
 
 Capture all output. If there are failures, note:
+
 - Which test files failed
 - Which specific tests failed
 - The error messages
@@ -29,6 +30,7 @@ Capture all output. Note any failures with their error messages.
 ## Step 3: Analyze Failures
 
 If there are failures, group them by type:
+
 - **Unit test failures**: Tests in `__tests__/` directory
 - **E2E test failures**: Tests in `tests/` directory
 
@@ -39,12 +41,14 @@ For each category of failures, spawn an agent in parallel using the Task tool:
 **IMPORTANT**: Use a SINGLE response with MULTIPLE Task tool calls to run agents in parallel.
 
 **Agent for Unit Test Failures**:
+
 - Receive the list of failing tests and error messages
 - Read the test files and source code
 - Fix the issues (either in tests or source code)
 - Re-run the specific tests to verify
 
 **Agent for E2E Test Failures**:
+
 - Receive the list of failing tests and error messages
 - Read the test files and relevant page/component code
 - Fix the issues

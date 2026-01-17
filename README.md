@@ -5,53 +5,62 @@ A production-ready Next.js boilerplate with authentication, database, tRPC API l
 ## 🚀 Features
 
 ### Core Stack
+
 - **Next.js 16.1.3** - React framework with App Router
 - **React 19.2.3** - Latest React with Server Components
 - **TypeScript 5.9.3** - Strict type safety
 - **Tailwind CSS 4.1.18** - Utility-first CSS framework
 
 ### Authentication
+
 - **NextAuth.js v5** (Auth.js) - Complete authentication solution
 - **Prisma Adapter** - Database-backed sessions
 - Credentials provider (ready for OAuth)
 - Session management with JWT
 
 ### Database & ORM
+
 - **Prisma 7.2.0** - Next-generation ORM
 - **PostgreSQL** adapter with connection pooling
 - Type-safe database client
 - Migration system
 
 ### API Layer
+
 - **tRPC 11.8.1** - End-to-end type safety
 - **React Query 5.90.18** - Data fetching and caching
 - Server Components integration
 - API route handlers
 
 ### UI Components
+
 - **shadcn/ui 3.7.0** - High-quality, accessible components
 - **Tailwind CSS** - Modern design system
 - **Lucide Icons** - Beautiful icon library
 - Dark mode support
 
 ### Environment & Validation
+
 - **@t3-oss/env-nextjs** - Type-safe environment variables
 - **Zod 4.3.5** - Schema validation
 - Build-time env validation
 
 ### Code Quality
+
 - **ESLint 9.39.2** - Flat config format
 - **Prettier 3.8.0** - Code formatting
 - **Husky 9.1.7** - Git hooks
 - Pre-commit linting
 
 ### Testing
+
 - **Vitest 4.0.17** - Unit testing
 - **Playwright 1.57.0** - E2E testing
 - **React Testing Library** - Component testing
 - Example test files included
 
 ### Deployment
+
 - **Vercel-ready** - Zero-config deployment
 - Environment variable management
 - Optimized builds
@@ -144,11 +153,9 @@ Edit `src/trpc/routers/_app.ts`:
 
 ```typescript
 export const appRouter = createTRPCRouter({
-  hello: baseProcedure
-    .input(z.object({ name: z.string() }))
-    .query(({ input }) => ({
-      greeting: `Hello ${input.name}!`,
-    })),
+  hello: baseProcedure.input(z.object({ name: z.string() })).query(({ input }) => ({
+    greeting: `Hello ${input.name}!`,
+  })),
 });
 ```
 
@@ -189,6 +196,7 @@ export function MyComponent() {
 4. Deploy
 
 The project is pre-configured with:
+
 - Automatic builds
 - Environment validation
 - Prisma generation

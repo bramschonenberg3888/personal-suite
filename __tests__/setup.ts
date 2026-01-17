@@ -1,6 +1,6 @@
-import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
-import { afterEach, vi } from "vitest";
+import '@testing-library/jest-dom/vitest';
+import { cleanup } from '@testing-library/react';
+import { afterEach, vi } from 'vitest';
 
 // Cleanup after each test case (e.g., clearing jsdom)
 afterEach(() => {
@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 // Mock Next.js router
-vi.mock("next/navigation", () => ({
+vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),
     replace: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock("next/navigation", () => ({
     forward: vi.fn(),
     refresh: vi.fn(),
   }),
-  usePathname: () => "/",
+  usePathname: () => '/',
   useSearchParams: () => new URLSearchParams(),
   useParams: () => ({}),
   redirect: vi.fn(),
@@ -25,42 +25,27 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Mock next/link
-vi.mock("next/link", () => ({
-  default: ({
-    children,
-    href,
-    ...props
-  }: {
-    children: React.ReactNode;
-    href: string;
-  }) => {
+vi.mock('next/link', () => ({
+  default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => {
     // Dynamic import to avoid issues during SSR testing
-    const React = require("react");
-    return React.createElement("a", { href, ...props }, children);
+    const React = require('react');
+    return React.createElement('a', { href, ...props }, children);
   },
 }));
 
 // Mock next/image
-vi.mock("next/image", () => ({
-  default: ({
-    src,
-    alt,
-    ...props
-  }: {
-    src: string;
-    alt: string;
-    [key: string]: unknown;
-  }) => {
-    const React = require("react");
-    return React.createElement("img", { src, alt, ...props });
+vi.mock('next/image', () => ({
+  default: ({ src, alt, ...props }: { src: string; alt: string; [key: string]: unknown }) => {
+    const React = require('react');
+    return React.createElement('img', { src, alt, ...props });
   },
 }));
 
 // Mock NextAuth session
-vi.mock("next-auth/react", () => ({
+vi.mock('next-auth/react', () => ({
   useSession: () => ({
     data: null,
-    status: "unauthenticated",
+    status: 'unauthenticated',
   }),
   signIn: vi.fn(),
   signOut: vi.fn(),
@@ -69,7 +54,7 @@ vi.mock("next-auth/react", () => ({
 }));
 
 // Mock window.matchMedia for components using media queries
-Object.defineProperty(window, "matchMedia", {
+Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
     matches: false,
@@ -86,7 +71,7 @@ Object.defineProperty(window, "matchMedia", {
 // Mock IntersectionObserver
 class MockIntersectionObserver {
   readonly root: Element | null = null;
-  readonly rootMargin: string = "";
+  readonly rootMargin: string = '';
   readonly thresholds: ReadonlyArray<number> = [];
 
   constructor() {}
@@ -99,7 +84,7 @@ class MockIntersectionObserver {
   }
 }
 
-Object.defineProperty(window, "IntersectionObserver", {
+Object.defineProperty(window, 'IntersectionObserver', {
   writable: true,
   value: MockIntersectionObserver,
 });
@@ -111,7 +96,7 @@ class MockResizeObserver {
   disconnect() {}
 }
 
-Object.defineProperty(window, "ResizeObserver", {
+Object.defineProperty(window, 'ResizeObserver', {
   writable: true,
   value: MockResizeObserver,
 });

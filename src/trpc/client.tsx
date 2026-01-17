@@ -1,18 +1,18 @@
-"use client";
+'use client';
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
-import { createTRPCReact } from "@trpc/react-query";
-import { useState } from "react";
-import { makeQueryClient } from "./query-client";
-import type { AppRouter } from "./routers/_app";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { httpBatchLink } from '@trpc/client';
+import { createTRPCReact } from '@trpc/react-query';
+import { useState } from 'react';
+import { makeQueryClient } from './query-client';
+import type { AppRouter } from './routers/_app';
 
 export const trpc = createTRPCReact<AppRouter>();
 
 let clientQueryClientSingleton: QueryClient | undefined;
 
 function getQueryClient() {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return makeQueryClient();
   }
   return (clientQueryClientSingleton ??= makeQueryClient());
@@ -20,9 +20,9 @@ function getQueryClient() {
 
 function getUrl() {
   const base = (() => {
-    if (typeof window !== "undefined") return "";
+    if (typeof window !== 'undefined') return '';
     if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-    return "http://localhost:3000";
+    return 'http://localhost:3000';
   })();
   return `${base}/api/trpc`;
 }

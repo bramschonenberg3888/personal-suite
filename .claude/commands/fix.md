@@ -26,6 +26,7 @@ bun run format:check
 ## Step 2: Collect and Parse Errors
 
 Parse the output from the linting and typechecking commands. Group errors by domain:
+
 - **Type errors**: Issues from TypeScript (`tsc --noEmit`)
 - **Lint errors**: Issues from ESLint
 - **Format errors**: Issues from Prettier
@@ -39,22 +40,26 @@ For each domain that has issues, spawn an agent in parallel using the Task tool:
 **IMPORTANT**: Use a SINGLE response with MULTIPLE Task tool calls to run agents in parallel.
 
 Example:
+
 - Spawn a "type-fixer" agent for type errors
 - Spawn a "lint-fixer" agent for lint errors
 - Spawn a "format-fixer" agent for formatting errors
 
 Each agent should:
+
 1. Receive the list of files and specific errors in their domain
 2. Fix all errors in their domain
 3. Run the relevant check command to verify fixes
 4. Report completion
 
 For lint errors that can be auto-fixed, run:
+
 ```bash
 bun run lint:fix
 ```
 
 For format errors, run:
+
 ```bash
 bun run format
 ```

@@ -47,6 +47,13 @@ model User {
   accounts      Account[]
   sessions      Session[]
   posts         Post[]
+  // Personal Suite relations
+  watchlists      Watchlist[]
+  drawings        Drawing[]
+  libraries       ExcalidrawLibrary[]
+  trackedProducts TrackedProduct[]
+  supermarkets    UserSupermarket[]
+  location        UserLocation?
 }
 
 model VerificationToken {
@@ -66,5 +73,142 @@ model Post {
   authorId  String
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ===== PORTFOLIO TRACKER =====
+model Watchlist {
+  id        String          @id @default(cuid())
+  name      String          @default("Default")
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WatchlistItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([userId, name])
+}
+
+model WatchlistItem {
+  id          String    @id @default(cuid())
+  isin        String
+  symbol      String
+  name        String
+  exchange    String
+  currency    String
+  watchlistId String
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([watchlistId, isin])
+}
+
+// ===== EXCALIDRAW =====
+model Drawing {
+  id        String        @id @default(cuid())
+  name      String
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  elements  Json
+  appState  Json?
+  files     DrawingFile[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId])
+}
+
+model DrawingFile {
+  id        String   @id @default(cuid())
+  fileId    String
+  drawingId String
+  drawing   Drawing  @relation(fields: [drawingId], references: [id], onDelete: Cascade)
+  mimeType  String
+  dataUrl   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@unique([drawingId, fileId])
+}
+
+model ExcalidrawLibrary {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     Json // LibraryItems array from Excalidraw
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+}
+
+// ===== PERSONAL SHOPPER =====
+model Supermarket {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  url      String?
+  logoUrl  String?
+  products Product[]
+}
+
+model Product {
+  id            String           @id @default(cuid())
+  externalId    String
+  name          String
+  supermarketId String
+  supermarket   Supermarket      @relation(fields: [supermarketId], references: [id], onDelete: Cascade)
+  category      String?
+  imageUrl      String?
+  currentPrice  Float
+  unit          String?
+  priceHistory  PriceHistory[]
+  trackedBy     TrackedProduct[]
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([supermarketId, externalId])
+}
+
+model PriceHistory {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price      Float
+  recordedAt DateTime @default(now())
+
+  @@index([productId, recordedAt])
+}
+
+model TrackedProduct {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  targetPrice Float?
+  alertOnSale Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model UserSupermarket {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supermarketId String
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, supermarketId])
+}
+
+// ===== WEATHER =====
+model UserLocation {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city      String
+  country   String
+  lat       Float
+  lon       Float
   updatedAt DateTime @updatedAt
 }
