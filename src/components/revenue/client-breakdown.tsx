@@ -1,6 +1,8 @@
 'use client';
 
-import { Card, Title, DonutChart, List, ListItem, Flex, Text, Bold } from '@tremor/react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/trpc/client';
 
 interface ClientBreakdownProps {
@@ -18,17 +20,17 @@ function formatCurrency(value: number): string {
 }
 
 const COLORS = [
-  'blue',
-  'cyan',
-  'indigo',
-  'violet',
-  'fuchsia',
-  'rose',
-  'amber',
-  'emerald',
-  'teal',
-  'lime',
-] as const;
+  '#3b82f6',
+  '#06b6d4',
+  '#6366f1',
+  '#8b5cf6',
+  '#d946ef',
+  '#f43f5e',
+  '#f59e0b',
+  '#10b981',
+  '#14b8a6',
+  '#84cc16',
+];
 
 export function ClientBreakdown({ startDate, endDate, types }: ClientBreakdownProps) {
   const { data, isLoading } = trpc.revenue.entries.byClient.useQuery({
@@ -48,44 +50,65 @@ export function ClientBreakdown({ startDate, endDate, types }: ClientBreakdownPr
 
   return (
     <Card>
-      <Title>Revenue by Client</Title>
-
-      {isLoading ? (
-        <div className="mt-4 h-60 animate-pulse rounded bg-gray-200" />
-      ) : chartData.length === 0 ? (
-        <div className="mt-4 flex h-60 items-center justify-center text-gray-500">
-          No client data available
-        </div>
-      ) : (
-        <>
-          <DonutChart
-            className="mt-4 h-48"
-            data={chartData}
-            category="value"
-            index="name"
-            valueFormatter={formatCurrency}
-            colors={chartData.map((d) => d.color)}
-            showAnimation
-          />
-          <List className="mt-4">
-            {chartData.slice(0, 5).map((item) => (
-              <ListItem key={item.name}>
-                <Flex justifyContent="start" className="gap-2 truncate">
-                  <span
-                    className={`h-3 w-3 rounded-full bg-${item.color}-500 flex-shrink-0`}
-                    aria-hidden
-                  />
-                  <Text className="truncate">{item.name}</Text>
-                </Flex>
-                <Flex justifyContent="end" className="gap-4">
-                  <Text>{((item.value / total) * 100).toFixed(0)}%</Text>
-                  <Bold>{formatCurrency(item.value)}</Bold>
-                </Flex>
-              </ListItem>
-            ))}
-          </List>
-        </>
-      )}
+      <CardHeader>
+        <CardTitle>Revenue by Client</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-60 w-full" />
+        ) : chartData.length === 0 ? (
+          <div className="flex h-60 items-center justify-center text-gray-500">
+            No client data available
+          </div>
+        ) : (
+          <>
+            <ResponsiveContainer width="100%" height={192}>
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value) => formatCurrency(value as number)}
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '6px',
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <ul className="mt-4 space-y-2">
+              {chartData.slice(0, 5).map((item) => (
+                <li key={item.name} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2 truncate">
+                    <span
+                      className="h-3 w-3 flex-shrink-0 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="truncate">{item.name}</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-muted-foreground">
+                      {((item.value / total) * 100).toFixed(0)}%
+                    </span>
+                    <span className="font-semibold">{formatCurrency(item.value)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </CardContent>
     </Card>
   );
 }

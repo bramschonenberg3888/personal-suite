@@ -1,19 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw, Loader2, AlertCircle, Database } from 'lucide-react';
-import {
-  Card,
-  Grid,
-  Title,
-  Text,
-  Flex,
-  DateRangePicker,
-  type DateRangePickerValue,
-  MultiSelect,
-  MultiSelectItem,
-} from '@tremor/react';
+import { RefreshCw, Loader2, AlertCircle, Database, X, Check } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/trpc/client';
 import { NotionSettingsDialog } from './notion-settings-dialog';
 import { KpiCards } from './kpi-cards';
@@ -22,10 +23,17 @@ import { ClientBreakdown } from './client-breakdown';
 import { TypeBreakdown } from './type-breakdown';
 import { RevenueTable } from './revenue-table';
 
+interface DateRange {
+  from?: Date;
+  to?: Date;
+}
+
 export function RevenueDashboard() {
-  const [dateRange, setDateRange] = useState<DateRangePickerValue>({});
+  const [dateRange, setDateRange] = useState<DateRange>({});
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [clientsOpen, setClientsOpen] = useState(false);
+  const [typesOpen, setTypesOpen] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: connection, isLoading: connectionLoading } = trpc.revenue.connection.get.useQuery();
@@ -64,17 +72,29 @@ export function RevenueDashboard() {
   const hasFilters =
     dateRange.from || dateRange.to || selectedClients.length > 0 || selectedTypes.length > 0;
 
+  const toggleClient = (client: string) => {
+    setSelectedClients((prev) =>
+      prev.includes(client) ? prev.filter((c) => c !== client) : [...prev, client]
+    );
+  };
+
+  const toggleType = (type: string) => {
+    setSelectedTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+
   // No connection configured
   if (!connectionLoading && !connection) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <div className="rounded-full bg-muted p-4">
-          <Database className="h-8 w-8 text-muted-foreground" />
+        <div className="bg-muted rounded-full p-4">
+          <Database className="text-muted-foreground h-8 w-8" />
         </div>
-        <Title className="mt-4">Connect Your Notion Database</Title>
-        <Text className="mt-2 max-w-sm text-center">
+        <h2 className="mt-4 text-xl font-semibold">Connect Your Notion Database</h2>
+        <p className="text-muted-foreground mt-2 max-w-sm text-center">
           To get started, connect your Notion time tracking database to sync your revenue data.
-        </Text>
+        </p>
         <div className="mt-6">
           <NotionSettingsDialog
             trigger={
@@ -92,20 +112,20 @@ export function RevenueDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <Flex justifyContent="between" alignItems="center">
+      <div className="flex items-center justify-between">
         <div>
-          <Title>Revenue Dashboard</Title>
+          <h1 className="text-2xl font-semibold">Revenue Dashboard</h1>
           {connection?.lastSyncAt && (
-            <Text className="mt-1">
+            <p className="text-muted-foreground mt-1 text-sm">
               Last synced:{' '}
               {new Intl.DateTimeFormat('nl-NL', {
                 dateStyle: 'medium',
                 timeStyle: 'short',
               }).format(new Date(connection.lastSyncAt))}
-            </Text>
+            </p>
           )}
         </div>
-        <Flex className="gap-2">
+        <div className="flex gap-2">
           <NotionSettingsDialog />
           <Button onClick={handleSync} disabled={syncMutation.isPending}>
             {syncMutation.isPending ? (
@@ -120,72 +140,158 @@ export function RevenueDashboard() {
               </>
             )}
           </Button>
-        </Flex>
-      </Flex>
+        </div>
+      </div>
 
       {/* Sync error */}
       {syncMutation.error && (
         <Card className="border-red-200 bg-red-50">
-          <Flex className="gap-2">
+          <CardContent className="flex items-center gap-2 py-3">
             <AlertCircle className="h-5 w-5 text-red-500" />
-            <Text className="text-red-700">{syncMutation.error.message}</Text>
-          </Flex>
+            <span className="text-red-700">{syncMutation.error.message}</span>
+          </CardContent>
         </Card>
       )}
 
       {/* Filters */}
       <Card>
-        <Flex justifyContent="between" alignItems="end" className="flex-wrap gap-4">
-          <Flex className="flex-wrap gap-4">
-            <div className="w-64">
-              <Text className="mb-1 text-sm font-medium">Date Range</Text>
-              <DateRangePicker
-                value={dateRange}
-                onValueChange={setDateRange}
-                selectPlaceholder="All time"
-                enableClear
+        <CardContent className="flex flex-wrap items-end justify-between gap-4 pt-6">
+          <div className="flex flex-wrap gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium">From</label>
+              <Input
+                type="date"
+                className="w-40"
+                value={dateRange.from?.toISOString().split('T')[0] ?? ''}
+                onChange={(e) =>
+                  setDateRange((prev) => ({
+                    ...prev,
+                    from: e.target.value ? new Date(e.target.value) : undefined,
+                  }))
+                }
               />
             </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">To</label>
+              <Input
+                type="date"
+                className="w-40"
+                value={dateRange.to?.toISOString().split('T')[0] ?? ''}
+                onChange={(e) =>
+                  setDateRange((prev) => ({
+                    ...prev,
+                    to: e.target.value ? new Date(e.target.value) : undefined,
+                  }))
+                }
+              />
+            </div>
+
             {filterOptions && filterOptions.clients.length > 0 && (
-              <div className="w-48">
-                <Text className="mb-1 text-sm font-medium">Clients</Text>
-                <MultiSelect
-                  value={selectedClients}
-                  onValueChange={setSelectedClients}
-                  placeholder="All clients"
-                >
-                  {filterOptions.clients.map((client) => (
-                    <MultiSelectItem key={client} value={client}>
-                      {client}
-                    </MultiSelectItem>
-                  ))}
-                </MultiSelect>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Clients</label>
+                <Popover open={clientsOpen} onOpenChange={setClientsOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-48 justify-start">
+                      {selectedClients.length > 0 ? (
+                        <span className="truncate">{selectedClients.length} selected</span>
+                      ) : (
+                        <span className="text-muted-foreground">All clients</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search clients..." />
+                      <CommandList>
+                        <CommandEmpty>No clients found.</CommandEmpty>
+                        <CommandGroup>
+                          {filterOptions.clients.map((client) => (
+                            <CommandItem key={client} onSelect={() => toggleClient(client)}>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={`flex h-4 w-4 items-center justify-center rounded border ${selectedClients.includes(client) ? 'border-primary bg-primary text-primary-foreground' : 'border-muted'}`}
+                                >
+                                  {selectedClients.includes(client) && (
+                                    <Check className="h-3 w-3" />
+                                  )}
+                                </div>
+                                <span className="truncate">{client}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
+
             {filterOptions && filterOptions.types.length > 0 && (
-              <div className="w-48">
-                <Text className="mb-1 text-sm font-medium">Types</Text>
-                <MultiSelect
-                  value={selectedTypes}
-                  onValueChange={setSelectedTypes}
-                  placeholder="All types"
-                >
-                  {filterOptions.types.map((type) => (
-                    <MultiSelectItem key={type} value={type}>
-                      {type}
-                    </MultiSelectItem>
-                  ))}
-                </MultiSelect>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Types</label>
+                <Popover open={typesOpen} onOpenChange={setTypesOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-48 justify-start">
+                      {selectedTypes.length > 0 ? (
+                        <span className="truncate">{selectedTypes.length} selected</span>
+                      ) : (
+                        <span className="text-muted-foreground">All types</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search types..." />
+                      <CommandList>
+                        <CommandEmpty>No types found.</CommandEmpty>
+                        <CommandGroup>
+                          {filterOptions.types.map((type) => (
+                            <CommandItem key={type} onSelect={() => toggleType(type)}>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={`flex h-4 w-4 items-center justify-center rounded border ${selectedTypes.includes(type) ? 'border-primary bg-primary text-primary-foreground' : 'border-muted'}`}
+                                >
+                                  {selectedTypes.includes(type) && <Check className="h-3 w-3" />}
+                                </div>
+                                <span className="truncate">{type}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
-          </Flex>
+          </div>
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="mr-1 h-4 w-4" />
               Clear filters
             </Button>
           )}
-        </Flex>
+        </CardContent>
       </Card>
+
+      {/* Selected filters */}
+      {(selectedClients.length > 0 || selectedTypes.length > 0) && (
+        <div className="flex flex-wrap gap-2">
+          {selectedClients.map((client) => (
+            <Badge key={client} variant="secondary" className="gap-1">
+              {client}
+              <X className="h-3 w-3 cursor-pointer" onClick={() => toggleClient(client)} />
+            </Badge>
+          ))}
+          {selectedTypes.map((type) => (
+            <Badge key={type} variant="outline" className="gap-1">
+              {type}
+              <X className="h-3 w-3 cursor-pointer" onClick={() => toggleType(type)} />
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <KpiCards data={kpiData} isLoading={kpisLoading} />
@@ -198,7 +304,7 @@ export function RevenueDashboard() {
         types={selectedTypes.length > 0 ? selectedTypes : undefined}
       />
 
-      <Grid numItemsSm={1} numItemsLg={2} className="gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ClientBreakdown
           startDate={dateRange.from}
           endDate={dateRange.to}
@@ -209,7 +315,7 @@ export function RevenueDashboard() {
           endDate={dateRange.to}
           clients={selectedClients.length > 0 ? selectedClients : undefined}
         />
-      </Grid>
+      </div>
 
       {/* Data Table */}
       <RevenueTable

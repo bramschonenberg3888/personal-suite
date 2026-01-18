@@ -1,6 +1,7 @@
 'use client';
 
-import { Card, Metric, Text, Flex, ProgressBar, Grid } from '@tremor/react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface KpiData {
   totalRevenue: number;
@@ -34,14 +35,16 @@ function formatNumber(value: number, decimals = 1): string {
 export function KpiCards({ data, isLoading }: KpiCardsProps) {
   if (isLoading) {
     return (
-      <Grid numItemsSm={2} numItemsLg={4} className="gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[...Array(4)].map((_, i) => (
-          <Card key={i} className="animate-pulse">
-            <div className="h-4 w-24 rounded bg-gray-200" />
-            <div className="mt-2 h-8 w-32 rounded bg-gray-200" />
+          <Card key={i}>
+            <CardContent className="pt-6">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-2 h-8 w-32" />
+            </CardContent>
           </Card>
         ))}
-      </Grid>
+      </div>
     );
   }
 
@@ -76,21 +79,24 @@ export function KpiCards({ data, isLoading }: KpiCardsProps) {
   ];
 
   return (
-    <Grid numItemsSm={2} numItemsLg={4} className="gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {kpis.map((kpi) => (
         <Card key={kpi.title}>
-          <Text>{kpi.title}</Text>
-          <Metric className="mt-1">{kpi.metric}</Metric>
-          {kpi.progress !== undefined ? (
-            <Flex className="mt-2">
-              <Text className="text-tremor-default">{kpi.subtext}</Text>
-            </Flex>
-          ) : (
-            <Text className="text-tremor-default mt-2">{kpi.subtext}</Text>
-          )}
-          {kpi.progress !== undefined && <ProgressBar value={kpi.progress} className="mt-2" />}
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground text-sm">{kpi.title}</p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight">{kpi.metric}</p>
+            <p className="text-muted-foreground mt-2 text-sm">{kpi.subtext}</p>
+            {kpi.progress !== undefined && (
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all"
+                  style={{ width: `${kpi.progress}%` }}
+                />
+              </div>
+            )}
+          </CardContent>
         </Card>
       ))}
-    </Grid>
+    </div>
   );
 }

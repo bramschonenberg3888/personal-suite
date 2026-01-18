@@ -1,17 +1,8 @@
 'use client';
 
-import {
-  Card,
-  Title,
-  Table,
-  TableHead,
-  TableHeaderCell,
-  TableBody,
-  TableRow,
-  TableCell,
-  Badge,
-  Text,
-} from '@tremor/react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/trpc/client';
 
 interface RevenueTableProps {
@@ -62,74 +53,69 @@ export function RevenueTable({
 
   return (
     <Card>
-      <Title>Time Entries</Title>
-
-      {isLoading ? (
-        <div className="mt-4 space-y-2">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded bg-gray-200" />
-          ))}
-        </div>
-      ) : !data || data.length === 0 ? (
-        <div className="mt-4 flex h-40 items-center justify-center text-gray-500">
-          No entries found
-        </div>
-      ) : (
-        <Table className="mt-4">
-          <TableHead>
-            <TableRow>
-              <TableHeaderCell>Date</TableHeaderCell>
-              <TableHeaderCell>Description</TableHeaderCell>
-              <TableHeaderCell>Client</TableHeaderCell>
-              <TableHeaderCell>Type</TableHeaderCell>
-              <TableHeaderCell className="text-right">Hours</TableHeaderCell>
-              <TableHeaderCell className="text-right">Rate</TableHeaderCell>
-              <TableHeaderCell className="text-right">Revenue</TableHeaderCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {data.map((entry) => (
-              <TableRow key={entry.id}>
-                <TableCell>
-                  <Text>{formatDate(entry.startTime)}</Text>
-                </TableCell>
-                <TableCell>
-                  <Text className="max-w-xs truncate">{entry.description || '-'}</Text>
-                </TableCell>
-                <TableCell>
-                  {entry.client ? (
-                    <Badge color="blue">{entry.client}</Badge>
-                  ) : (
-                    <Text className="text-gray-400">-</Text>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {entry.type ? (
-                    <Badge color="gray">{entry.type}</Badge>
-                  ) : (
-                    <Text className="text-gray-400">-</Text>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Text>{formatHours(entry.hours)}</Text>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Text>{formatCurrency(entry.rate)}</Text>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Text className="font-medium">{formatCurrency(entry.revenue)}</Text>
-                </TableCell>
-              </TableRow>
+      <CardHeader>
+        <CardTitle>Time Entries</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
             ))}
-          </TableBody>
-        </Table>
-      )}
+          </div>
+        ) : !data || data.length === 0 ? (
+          <div className="flex h-40 items-center justify-center text-gray-500">
+            No entries found
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-muted-foreground pb-3 text-left font-medium">Date</th>
+                  <th className="text-muted-foreground pb-3 text-left font-medium">Description</th>
+                  <th className="text-muted-foreground pb-3 text-left font-medium">Client</th>
+                  <th className="text-muted-foreground pb-3 text-left font-medium">Type</th>
+                  <th className="text-muted-foreground pb-3 text-right font-medium">Hours</th>
+                  <th className="text-muted-foreground pb-3 text-right font-medium">Rate</th>
+                  <th className="text-muted-foreground pb-3 text-right font-medium">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((entry) => (
+                  <tr key={entry.id} className="border-b last:border-0">
+                    <td className="py-3">{formatDate(entry.startTime)}</td>
+                    <td className="max-w-xs truncate py-3">{entry.description || '-'}</td>
+                    <td className="py-3">
+                      {entry.client ? (
+                        <Badge variant="secondary">{entry.client}</Badge>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="py-3">
+                      {entry.type ? (
+                        <Badge variant="outline">{entry.type}</Badge>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 text-right">{formatHours(entry.hours)}</td>
+                    <td className="py-3 text-right">{formatCurrency(entry.rate)}</td>
+                    <td className="py-3 text-right font-medium">{formatCurrency(entry.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      {data && data.length >= limit && (
-        <Text className="text-muted-foreground mt-4 text-center text-sm">
-          Showing first {limit} entries. Use filters to narrow results.
-        </Text>
-      )}
+        {data && data.length >= limit && (
+          <p className="text-muted-foreground mt-4 text-center text-sm">
+            Showing first {limit} entries. Use filters to narrow results.
+          </p>
+        )}
+      </CardContent>
     </Card>
   );
 }
