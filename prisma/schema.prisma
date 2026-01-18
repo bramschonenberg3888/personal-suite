@@ -48,13 +48,15 @@ model User {
   sessions      Session[]
   posts         Post[]
   // Personal Suite relations
-  portfolioItems  PortfolioItem[]
-  drawings        Drawing[]
-  drawingFolders  DrawingFolder[]
-  libraries       ExcalidrawLibrary[]
-  trackedProducts TrackedProduct[]
-  supermarkets    UserSupermarket[]
-  location        UserLocation?
+  portfolioItems   PortfolioItem[]
+  drawings         Drawing[]
+  drawingFolders   DrawingFolder[]
+  libraries        ExcalidrawLibrary[]
+  trackedProducts  TrackedProduct[]
+  supermarkets     UserSupermarket[]
+  location         UserLocation?
+  notionConnection NotionConnection?
+  revenueEntries   RevenueEntry[]
 }
 
 model VerificationToken {
@@ -220,4 +222,46 @@ model UserLocation {
   lat       Float
   lon       Float
   updatedAt DateTime @updatedAt
+}
+
+// ===== REVENUE TRACKER =====
+model NotionConnection {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  databaseId String
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model RevenueEntry {
+  id             String    @id @default(cuid())
+  notionPageId   String    @unique
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description    String?
+  kilometers     Float?
+  minutes        Int?
+  hours          Float?
+  billable       Boolean   @default(true)
+  startTime      DateTime?
+  endTime        DateTime?
+  breakMinutes   Int?
+  client         String?
+  type           String?
+  rate           Float?
+  revenue        Float?
+  taxReservation Float?
+  netIncome      Float?
+  year           Int?
+  quarter        String?
+  month          String?
+  monthNumber    Int?
+  week           Int?
+  syncedAt       DateTime  @default(now())
+
+  @@index([userId])
+  @@index([userId, year])
+  @@index([startTime])
 }

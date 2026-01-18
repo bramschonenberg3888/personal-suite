@@ -1,6 +1,6 @@
 # personal-suite
 
-Personal productivity and financial suite: stock portfolio watchlist (Yahoo Finance), Dutch supermarket price tracking (Albert Heijn & Jumbo), weather forecasts (Open-Meteo), and Excalidraw drawing canvas.
+Personal productivity and financial suite: stock portfolio watchlist (Yahoo Finance), Dutch supermarket price tracking (Albert Heijn & Jumbo), weather forecasts (Open-Meteo), Excalidraw drawing canvas, and revenue tracking (Notion integration).
 
 ## Project Structure
 
@@ -11,7 +11,8 @@ src/
 │   │   ├── portfolio/        # Stock portfolio tracker
 │   │   ├── drawings/         # Excalidraw drawings
 │   │   ├── shopper/          # Supermarket price tracker
-│   │   └── weather/          # Weather forecasts
+│   │   ├── weather/          # Weather forecasts
+│   │   └── revenue/          # Revenue tracking dashboard
 │   └── api/
 │       ├── auth/[...nextauth]/ # NextAuth routes
 │       └── trpc/[trpc]/      # tRPC endpoint
@@ -21,20 +22,23 @@ src/
 │   ├── portfolio/            # Stock cards, watchlist
 │   ├── drawing/              # Excalidraw wrapper, canvas
 │   ├── shopper/              # Product search, tracking
-│   └── weather/              # Weather display components
+│   ├── weather/              # Weather display components
+│   └── revenue/              # Revenue charts, tables, KPIs
 ├── lib/
 │   ├── api/                  # External API clients
 │   │   ├── yahoo-finance.ts  # Stock quotes & news
 │   │   ├── albert-heijn.ts   # AH product search
 │   │   ├── jumbo.ts          # Jumbo product search
-│   │   └── open-meteo.ts     # Weather data
+│   │   ├── open-meteo.ts     # Weather data
+│   │   └── notion.ts         # Notion database integration
 │   ├── auth.ts               # NextAuth configuration
 │   └── db.ts                 # Prisma client singleton
 ├── trpc/routers/             # tRPC API procedures
 │   ├── portfolio.ts          # Watchlist & quotes
 │   ├── drawing.ts            # Drawing CRUD & library
 │   ├── shopper.ts            # Product tracking
-│   └── weather.ts            # Location & forecasts
+│   ├── weather.ts            # Location & forecasts
+│   └── revenue.ts            # Revenue data from Notion
 ├── hooks/                    # Custom React hooks
 └── generated/prisma/         # Prisma generated client
 
@@ -65,7 +69,7 @@ tests/                        # E2E tests (Playwright)
 
 Features are isolated for parallel Claude Code sessions. Each feature has its own page, components, API client, and tRPC router.
 
-**Safe for parallel work:** All feature-specific files (portfolio, drawing, shopper, weather)
+**Safe for parallel work:** All feature-specific files (portfolio, drawing, shopper, weather, revenue)
 
 **Coordinate changes to:** `src/trpc/routers/_app.ts`, `prisma/schema.prisma`, `src/components/layout/`
 

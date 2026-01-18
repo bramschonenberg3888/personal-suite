@@ -27,6 +27,7 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@excalidraw/excalidraw": "^0.18.0",
+    "@notionhq/client": "^2.2.15",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
     "@radix-ui/react-avatar": "^1.1.11",
@@ -40,6 +41,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@t3-oss/env-nextjs": "^0.13.10",
     "@tanstack/react-query": "^5.90.19",
+    "@tremor/react": "^3.18.7",
     "@trpc/client": "^11.8.1",
     "@trpc/react-query": "^11.8.1",
     "@trpc/server": "^11.8.1",
