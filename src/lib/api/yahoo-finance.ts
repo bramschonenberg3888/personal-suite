@@ -1,4 +1,4 @@
-const BASE_URL = 'https://query1.finance.yahoo.com';
+import YahooFinance from 'yahoo-finance2';
 
 export interface QuoteResult {
   symbol: string;
@@ -107,99 +107,62 @@ export interface QuoteSummary {
   averageVolume10days?: number;
 }
 
-const DEFAULT_HEADERS = {
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  Accept: 'application/json',
-  'Accept-Language': 'en-US,en;q=0.9',
-};
-
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit = {},
-  timeout = 10000
-): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...DEFAULT_HEADERS,
-        ...options.headers,
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw error;
-  }
-}
+// Create yahoo-finance instance with suppressed notices
+const yahooFinance = new YahooFinance({
+  suppressNotices: ['yahooSurvey'],
+  validation: {
+    logErrors: false,
+  },
+});
 
 export async function getQuotes(symbols: string[]): Promise<QuoteResult[]> {
   if (symbols.length === 0) return [];
 
-  const symbolsParam = symbols.join(',');
-  const url = `${BASE_URL}/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}`;
+  const results = await yahooFinance.quote(symbols);
 
-  const response = await fetchWithTimeout(url);
+  // Handle both single and multiple results
+  const quotes = Array.isArray(results) ? results : [results];
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch quotes: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const results = data?.quoteResponse?.result || [];
-
-  return results.map(
-    (quote: Record<string, unknown>): QuoteResult => ({
-      symbol: quote.symbol as string,
-      shortName: (quote.shortName as string) || (quote.symbol as string),
-      longName: quote.longName as string | undefined,
-      regularMarketPrice: quote.regularMarketPrice as number,
-      regularMarketChange: quote.regularMarketChange as number,
-      regularMarketChangePercent: quote.regularMarketChangePercent as number,
-      regularMarketPreviousClose: quote.regularMarketPreviousClose as number,
-      regularMarketOpen: quote.regularMarketOpen as number | undefined,
-      regularMarketDayHigh: quote.regularMarketDayHigh as number | undefined,
-      regularMarketDayLow: quote.regularMarketDayLow as number | undefined,
-      regularMarketVolume: quote.regularMarketVolume as number | undefined,
-      marketCap: quote.marketCap as number | undefined,
-      currency: (quote.currency as string) || 'USD',
-      exchange: (quote.exchange as string) || '',
-      quoteType: (quote.quoteType as string) || 'EQUITY',
-    })
-  );
+  return quotes.map((quote) => ({
+    symbol: quote.symbol,
+    shortName: quote.shortName || quote.symbol,
+    longName: quote.longName,
+    regularMarketPrice: quote.regularMarketPrice || 0,
+    regularMarketChange: quote.regularMarketChange || 0,
+    regularMarketChangePercent: quote.regularMarketChangePercent || 0,
+    regularMarketPreviousClose: quote.regularMarketPreviousClose || 0,
+    regularMarketOpen: quote.regularMarketOpen,
+    regularMarketDayHigh: quote.regularMarketDayHigh,
+    regularMarketDayLow: quote.regularMarketDayLow,
+    regularMarketVolume: quote.regularMarketVolume,
+    marketCap: quote.marketCap,
+    currency: quote.currency || 'USD',
+    exchange: quote.exchange || '',
+    quoteType: quote.quoteType || 'EQUITY',
+  }));
 }
 
 export async function searchSecurities(query: string): Promise<SearchResult[]> {
   if (!query || query.length < 1) return [];
 
-  const url = `${BASE_URL}/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`;
+  const results = await yahooFinance.search(query, {
+    quotesCount: 10,
+    newsCount: 0,
+  });
 
-  const response = await fetchWithTimeout(url);
-
-  if (!response.ok) {
-    throw new Error(`Failed to search securities: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const quotes = data?.quotes || [];
+  const quotes = results.quotes || [];
 
   return quotes
-    .filter((q: Record<string, unknown>) => q.quoteType === 'EQUITY' || q.quoteType === 'ETF')
+    .filter((q) => q.quoteType === 'EQUITY' || q.quoteType === 'ETF')
     .map(
-      (quote: Record<string, unknown>): SearchResult => ({
-        symbol: quote.symbol as string,
-        shortname: (quote.shortname as string) || (quote.symbol as string),
-        longname: quote.longname as string | undefined,
-        exchange: (quote.exchange as string) || '',
-        quoteType: (quote.quoteType as string) || 'EQUITY',
-        typeDisp: (quote.typeDisp as string) || '',
-        exchDisp: (quote.exchDisp as string) || '',
+      (quote): SearchResult => ({
+        symbol: String(quote.symbol),
+        shortname: String(quote.shortname || quote.symbol),
+        longname: quote.longname ? String(quote.longname) : undefined,
+        exchange: String(quote.exchange || ''),
+        quoteType: String(quote.quoteType || 'EQUITY'),
+        typeDisp: String(quote.typeDisp || ''),
+        exchDisp: String(quote.exchDisp || ''),
       })
     );
 }
@@ -210,147 +173,112 @@ export async function getHistoricalData(
   period2: Date = new Date(),
   interval: '1d' | '1wk' | '1mo' = '1d'
 ): Promise<HistoricalData[]> {
-  const p1 = Math.floor(period1.getTime() / 1000);
-  const p2 = Math.floor(period2.getTime() / 1000);
+  const results = await yahooFinance.chart(symbol, {
+    period1,
+    period2,
+    interval,
+  });
 
-  const url = `${BASE_URL}/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${p1}&period2=${p2}&interval=${interval}`;
+  const quotes = results.quotes || [];
 
-  const response = await fetchWithTimeout(url);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch historical data: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const result = data?.chart?.result?.[0];
-
-  if (!result) {
-    return [];
-  }
-
-  const timestamps = result.timestamp || [];
-  const quote = result.indicators?.quote?.[0] || {};
-  const adjClose = result.indicators?.adjclose?.[0]?.adjclose || [];
-
-  return timestamps.map(
-    (ts: number, i: number): HistoricalData => ({
-      date: new Date(ts * 1000),
-      open: quote.open?.[i] || 0,
-      high: quote.high?.[i] || 0,
-      low: quote.low?.[i] || 0,
-      close: quote.close?.[i] || 0,
-      volume: quote.volume?.[i] || 0,
-      adjClose: adjClose[i] || quote.close?.[i] || 0,
-    })
-  );
+  return quotes.map((quote) => ({
+    date: quote.date,
+    open: quote.open || 0,
+    high: quote.high || 0,
+    low: quote.low || 0,
+    close: quote.close || 0,
+    volume: quote.volume || 0,
+    adjClose: quote.adjclose || quote.close || 0,
+  }));
 }
 
 export async function getNews(symbols: string[]): Promise<NewsItem[]> {
   if (symbols.length === 0) return [];
 
-  // Yahoo Finance doesn't have a dedicated news endpoint for multiple symbols
-  // We'll use the first symbol's news as a representative sample
+  // Use search endpoint with news to get related news
   const symbol = symbols[0];
-  const url = `${BASE_URL}/v1/finance/search?q=${encodeURIComponent(symbol)}&quotesCount=0&newsCount=10`;
+  const results = await yahooFinance.search(symbol, {
+    quotesCount: 0,
+    newsCount: 10,
+  });
 
-  const response = await fetchWithTimeout(url);
+  const news = results.news || [];
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch news: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const news = data?.news || [];
-
-  return news.map(
-    (item: Record<string, unknown>): NewsItem => ({
-      uuid: item.uuid as string,
-      title: item.title as string,
-      publisher: item.publisher as string,
-      link: item.link as string,
-      providerPublishTime: item.providerPublishTime as number,
-      thumbnail: item.thumbnail as NewsItem['thumbnail'],
-      relatedTickers: item.relatedTickers as string[] | undefined,
-    })
-  );
+  return news.map((item) => ({
+    uuid: item.uuid,
+    title: item.title,
+    publisher: item.publisher || '',
+    link: item.link,
+    providerPublishTime: Math.floor(item.providerPublishTime.getTime() / 1000),
+    thumbnail: item.thumbnail,
+    relatedTickers: item.relatedTickers,
+  }));
 }
 
 export async function getQuoteSummary(symbol: string): Promise<QuoteSummary> {
-  const modules = 'price,summaryDetail,defaultKeyStatistics,assetProfile';
-  const url = `${BASE_URL}/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
+  const result = await yahooFinance.quoteSummary(symbol, {
+    modules: ['price', 'summaryDetail', 'defaultKeyStatistics', 'assetProfile'],
+  });
 
-  const response = await fetchWithTimeout(url);
+  const price = result.price;
+  const summaryDetail = result.summaryDetail;
+  const keyStats = result.defaultKeyStatistics;
+  const profile = result.assetProfile;
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch quote summary: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const result = data?.quoteSummary?.result?.[0];
-
-  if (!result) {
+  if (!price) {
     throw new Error(`No data found for symbol: ${symbol}`);
   }
 
-  const price = result.price || {};
-  const summaryDetail = result.summaryDetail || {};
-  const keyStats = result.defaultKeyStatistics || {};
-  const profile = result.assetProfile || {};
-
-  // Helper to extract raw value from Yahoo Finance format
-  const getRaw = (obj: Record<string, unknown> | undefined): number | undefined => {
-    if (!obj) return undefined;
-    return (obj.raw as number) ?? undefined;
-  };
-
   return {
     // Basic info
-    symbol: (price.symbol as string) || symbol,
-    shortName: (price.shortName as string) || symbol,
-    longName: price.longName as string | undefined,
-    currency: (price.currency as string) || 'USD',
-    exchange: (price.exchangeName as string) || '',
-    quoteType: (price.quoteType as string) || 'EQUITY',
+    symbol: price.symbol || symbol,
+    shortName: price.shortName || symbol,
+    longName: price.longName ?? undefined,
+    currency: price.currency || 'USD',
+    exchange: price.exchangeName || '',
+    quoteType: price.quoteType || 'EQUITY',
 
     // Current price data
-    regularMarketPrice: getRaw(price.regularMarketPrice) || 0,
-    regularMarketChange: getRaw(price.regularMarketChange) || 0,
-    regularMarketChangePercent: (getRaw(price.regularMarketChangePercent) || 0) * 100,
-    regularMarketPreviousClose: getRaw(price.regularMarketPreviousClose) || 0,
-    regularMarketOpen: getRaw(price.regularMarketOpen),
-    regularMarketDayHigh: getRaw(price.regularMarketDayHigh),
-    regularMarketDayLow: getRaw(price.regularMarketDayLow),
-    regularMarketVolume: getRaw(price.regularMarketVolume),
+    regularMarketPrice: price.regularMarketPrice || 0,
+    regularMarketChange: price.regularMarketChange || 0,
+    regularMarketChangePercent: (price.regularMarketChangePercent || 0) * 100,
+    regularMarketPreviousClose: price.regularMarketPreviousClose || 0,
+    regularMarketOpen: price.regularMarketOpen,
+    regularMarketDayHigh: price.regularMarketDayHigh,
+    regularMarketDayLow: price.regularMarketDayLow,
+    regularMarketVolume: price.regularMarketVolume,
 
     // Extended price stats
-    fiftyTwoWeekHigh: getRaw(summaryDetail.fiftyTwoWeekHigh),
-    fiftyTwoWeekLow: getRaw(summaryDetail.fiftyTwoWeekLow),
-    fiftyDayAverage: getRaw(summaryDetail.fiftyDayAverage),
-    twoHundredDayAverage: getRaw(summaryDetail.twoHundredDayAverage),
-    fiftyDayAverageChange: getRaw(keyStats.fiftyTwoWeekChange),
-    twoHundredDayAverageChange: getRaw(keyStats['52WeekChange']),
+    fiftyTwoWeekHigh: summaryDetail?.fiftyTwoWeekHigh,
+    fiftyTwoWeekLow: summaryDetail?.fiftyTwoWeekLow,
+    fiftyDayAverage: summaryDetail?.fiftyDayAverage,
+    twoHundredDayAverage: summaryDetail?.twoHundredDayAverage,
+    fiftyDayAverageChange:
+      typeof keyStats?.fiftyTwoWeekChange === 'number' ? keyStats.fiftyTwoWeekChange : undefined,
+    twoHundredDayAverageChange:
+      typeof keyStats?.['52WeekChange'] === 'number' ? keyStats['52WeekChange'] : undefined,
 
     // Fundamentals
-    marketCap: getRaw(price.marketCap),
-    trailingPE: getRaw(summaryDetail.trailingPE),
-    forwardPE: getRaw(summaryDetail.forwardPE),
-    priceToBook: getRaw(keyStats.priceToBook),
-    dividendYield: getRaw(summaryDetail.dividendYield),
-    dividendRate: getRaw(summaryDetail.dividendRate),
-    beta: getRaw(summaryDetail.beta),
-    trailingAnnualDividendYield: getRaw(summaryDetail.trailingAnnualDividendYield),
+    marketCap: price.marketCap,
+    trailingPE: summaryDetail?.trailingPE,
+    forwardPE: summaryDetail?.forwardPE,
+    priceToBook: keyStats?.priceToBook,
+    dividendYield: summaryDetail?.dividendYield,
+    dividendRate: summaryDetail?.dividendRate,
+    beta: summaryDetail?.beta,
+    trailingAnnualDividendYield: summaryDetail?.trailingAnnualDividendYield,
 
     // Company info
-    sector: profile.sector as string | undefined,
-    industry: profile.industry as string | undefined,
-    fullTimeEmployees: profile.fullTimeEmployees as number | undefined,
-    website: profile.website as string | undefined,
-    longBusinessSummary: profile.longBusinessSummary as string | undefined,
-    city: profile.city as string | undefined,
-    country: profile.country as string | undefined,
+    sector: profile?.sector,
+    industry: profile?.industry,
+    fullTimeEmployees: profile?.fullTimeEmployees,
+    website: profile?.website,
+    longBusinessSummary: profile?.longBusinessSummary,
+    city: profile?.city,
+    country: profile?.country,
 
     // Volume stats
-    averageVolume: getRaw(summaryDetail.averageVolume),
-    averageVolume10days: getRaw(summaryDetail.averageVolume10days),
+    averageVolume: summaryDetail?.averageVolume,
+    averageVolume10days: summaryDetail?.averageVolume10days,
   };
 }

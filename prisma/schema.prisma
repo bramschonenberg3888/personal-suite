@@ -50,6 +50,7 @@ model User {
   // Personal Suite relations
   portfolioItems  PortfolioItem[]
   drawings        Drawing[]
+  drawingFolders  DrawingFolder[]
   libraries       ExcalidrawLibrary[]
   trackedProducts TrackedProduct[]
   supermarkets    UserSupermarket[]
@@ -93,18 +94,37 @@ model PortfolioItem {
 }
 
 // ===== EXCALIDRAW =====
+model DrawingFolder {
+  id        String          @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    DrawingFolder?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  DrawingFolder[] @relation("FolderHierarchy")
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drawings  Drawing[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([parentId])
+}
+
 model Drawing {
-  id        String        @id @default(cuid())
+  id        String         @id @default(cuid())
   name      String
   userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folderId  String?
+  folder    DrawingFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   elements  Json
   appState  Json?
   files     DrawingFile[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
   @@index([userId])
+  @@index([folderId])
 }
 
 model DrawingFile {

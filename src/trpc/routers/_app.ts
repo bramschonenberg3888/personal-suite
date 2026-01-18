@@ -10,10 +10,6 @@ export const appRouter = createTRPCRouter({
     greeting: `Hello ${input?.name ?? 'World'}!`,
   })),
 
-  getSession: baseProcedure.query(({ ctx }) => {
-    return ctx.session;
-  }),
-
   portfolio: portfolioRouter,
   drawing: drawingRouter,
   shopper: shopperRouter,

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -22,11 +23,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, MoreVertical, Pencil, Trash2, FileImage } from 'lucide-react';
+import { Plus, MoreVertical, Pencil, Trash2, FileImage, FolderInput } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { FolderBreadcrumbs } from './folder-breadcrumbs';
+import { FolderCard } from './folder-card';
+import { CreateFolderDialog } from './create-folder-dialog';
+import { MoveToFolderDialog } from './move-to-folder-dialog';
 
 export function DrawingList() {
   const router = useRouter();
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [newDrawingName, setNewDrawingName] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editingDrawing, setEditingDrawing] = useState<{
@@ -34,13 +40,23 @@ export function DrawingList() {
     name: string;
   } | null>(null);
 
+  // Move dialog state
+  const [moveItem, setMoveItem] = useState<{
+    id: string;
+    type: 'drawing' | 'folder';
+    name: string;
+    currentFolderId: string | null;
+  } | null>(null);
+
   const utils = trpc.useUtils();
 
-  const { data: drawings, isLoading } = trpc.drawing.getAll.useQuery();
+  const { data: contents, isLoading } = trpc.drawing.folder.getContents.useQuery({
+    folderId: currentFolderId,
+  });
 
   const createDrawing = trpc.drawing.create.useMutation({
     onSuccess: (drawing: { id: string }) => {
-      utils.drawing.getAll.invalidate();
+      utils.drawing.folder.getContents.invalidate();
       setNewDrawingName('');
       setCreateDialogOpen(false);
       router.push(`/drawings/${drawing.id}`);
@@ -49,16 +65,74 @@ export function DrawingList() {
 
   const updateDrawing = trpc.drawing.update.useMutation({
     onSuccess: () => {
-      utils.drawing.getAll.invalidate();
+      utils.drawing.folder.getContents.invalidate();
       setEditingDrawing(null);
     },
   });
 
   const deleteDrawing = trpc.drawing.delete.useMutation({
     onSuccess: () => {
-      utils.drawing.getAll.invalidate();
+      utils.drawing.folder.getContents.invalidate();
     },
   });
+
+  const moveDrawingToFolder = trpc.drawing.moveToFolder.useMutation({
+    onSuccess: () => {
+      utils.drawing.folder.getContents.invalidate();
+      setMoveItem(null);
+    },
+  });
+
+  const createFolder = trpc.drawing.folder.create.useMutation({
+    onSuccess: () => {
+      utils.drawing.folder.getContents.invalidate();
+    },
+    onError: (error) => {
+      console.error('Failed to create folder:', error);
+    },
+  });
+
+  const renameFolder = trpc.drawing.folder.rename.useMutation({
+    onSuccess: () => {
+      utils.drawing.folder.getContents.invalidate();
+    },
+  });
+
+  const moveFolder = trpc.drawing.folder.move.useMutation({
+    onSuccess: () => {
+      utils.drawing.folder.getContents.invalidate();
+      utils.drawing.folder.getAll.invalidate();
+      setMoveItem(null);
+    },
+  });
+
+  const deleteFolder = trpc.drawing.folder.delete.useMutation({
+    onSuccess: () => {
+      utils.drawing.folder.getContents.invalidate();
+    },
+  });
+
+  const handleCreateFolder = (name: string) => {
+    createFolder.mutate({ name, parentId: currentFolderId });
+  };
+
+  const handleRenameFolder = (id: string, name: string) => {
+    renameFolder.mutate({ id, name });
+  };
+
+  const handleMoveItem = (folderId: string | null) => {
+    if (!moveItem) return;
+
+    if (moveItem.type === 'drawing') {
+      moveDrawingToFolder.mutate({ id: moveItem.id, folderId });
+    } else {
+      moveFolder.mutate({ id: moveItem.id, parentId: folderId });
+    }
+  };
+
+  const handleDeleteFolder = (id: string) => {
+    deleteFolder.mutate({ id });
+  };
 
   if (isLoading) {
     return (
@@ -70,9 +144,17 @@ export function DrawingList() {
     );
   }
 
+  const folders = contents?.folders ?? [];
+  const drawings = contents?.drawings ?? [];
+  const hasContent = folders.length > 0 || drawings.length > 0;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* Breadcrumbs */}
+      <FolderBreadcrumbs currentFolderId={currentFolderId} onNavigate={setCurrentFolderId} />
+
+      {/* Actions */}
+      <div className="flex items-center gap-2">
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -83,6 +165,7 @@ export function DrawingList() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Drawing</DialogTitle>
+              <DialogDescription>Enter a name for your new drawing.</DialogDescription>
             </DialogHeader>
             <Input
               placeholder="Drawing name"
@@ -90,14 +173,22 @@ export function DrawingList() {
               onChange={(e) => setNewDrawingName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && newDrawingName.trim()) {
-                  createDrawing.mutate({ name: newDrawingName.trim() });
+                  createDrawing.mutate({
+                    name: newDrawingName.trim(),
+                    folderId: currentFolderId,
+                  });
                 }
               }}
               autoFocus
             />
             <DialogFooter>
               <Button
-                onClick={() => createDrawing.mutate({ name: newDrawingName.trim() })}
+                onClick={() =>
+                  createDrawing.mutate({
+                    name: newDrawingName.trim(),
+                    folderId: currentFolderId,
+                  })
+                }
                 disabled={!newDrawingName.trim() || createDrawing.isPending}
               >
                 Create
@@ -105,10 +196,36 @@ export function DrawingList() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <CreateFolderDialog
+          onCreateFolder={handleCreateFolder}
+          isPending={createFolder.isPending}
+        />
       </div>
 
-      {drawings && drawings.length > 0 ? (
+      {hasContent ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* Folders first */}
+          {folders.map((folder) => (
+            <FolderCard
+              key={folder.id}
+              folder={folder}
+              onNavigate={setCurrentFolderId}
+              onRename={handleRenameFolder}
+              onMove={(id) =>
+                setMoveItem({
+                  id,
+                  type: 'folder',
+                  name: folder.name,
+                  currentFolderId: folder.parentId,
+                })
+              }
+              onDelete={handleDeleteFolder}
+              isPending={renameFolder.isPending}
+            />
+          ))}
+
+          {/* Then drawings */}
           {drawings.map((drawing) => (
             <Card key={drawing.id} className="group relative hover:bg-accent/50 transition-colors">
               <Link href={`/drawings/${drawing.id}`}>
@@ -155,6 +272,20 @@ export function DrawingList() {
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.preventDefault();
+                        setMoveItem({
+                          id: drawing.id,
+                          type: 'drawing',
+                          name: drawing.name,
+                          currentFolderId: drawing.folderId,
+                        });
+                      }}
+                    >
+                      <FolderInput className="mr-2 h-4 w-4" />
+                      Move
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.preventDefault();
                         deleteDrawing.mutate({ id: drawing.id });
                       }}
                       className="text-destructive"
@@ -172,10 +303,12 @@ export function DrawingList() {
         <Card>
           <CardContent className="py-8 text-center">
             <FileImage className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-4">You don&#39;t have any drawings yet.</p>
+            <p className="text-muted-foreground mb-4">
+              {currentFolderId ? 'This folder is empty.' : "You don't have any drawings yet."}
+            </p>
             <Button onClick={() => setCreateDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Create Your First Drawing
+              {currentFolderId ? 'Create Drawing Here' : 'Create Your First Drawing'}
             </Button>
           </CardContent>
         </Card>
@@ -186,6 +319,7 @@ export function DrawingList() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rename Drawing</DialogTitle>
+            <DialogDescription>Enter a new name for this drawing.</DialogDescription>
           </DialogHeader>
           <Input
             value={editingDrawing?.name ?? ''}
@@ -219,6 +353,21 @@ export function DrawingList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Move Dialog */}
+      {moveItem && (
+        <MoveToFolderDialog
+          open={!!moveItem}
+          onOpenChange={(open) => !open && setMoveItem(null)}
+          itemId={moveItem.id}
+          itemType={moveItem.type}
+          itemName={moveItem.name}
+          currentFolderId={moveItem.currentFolderId}
+          excludeFolderId={moveItem.type === 'folder' ? moveItem.id : undefined}
+          onMove={handleMoveItem}
+          isPending={moveDrawingToFolder.isPending || moveFolder.isPending}
+        />
+      )}
     </div>
   );
 }

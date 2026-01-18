@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ComponentProps } from 'react';
+import '@excalidraw/excalidraw/index.css';
 
 const Excalidraw = dynamic(() => import('@excalidraw/excalidraw').then((mod) => mod.Excalidraw), {
   ssr: false,

@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { ExcalidrawWrapper } from './excalidraw-wrapper';
-import { useDebounce } from '@/hooks/use-debounce';
 import { trpc } from '@/trpc/client';
-import { Badge } from '@/components/ui/badge';
-import { Loader2, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, Save } from 'lucide-react';
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 
 interface DrawingCanvasProps {
   drawingId: string;
@@ -25,75 +25,70 @@ export function DrawingCanvas({
   libraryItems,
   onLibraryChange,
 }: DrawingCanvasProps) {
-  // Use lazy initializer to avoid impure function call during render
   const [timestamp] = useState(() => Date.now());
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
 
-  const updateDrawing = trpc.drawing.update.useMutation({
-    onMutate: () => setSaveStatus('saving'),
-    onSuccess: () => {
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
-    },
-    onError: () => setSaveStatus('error'),
-  });
+  const updateDrawing = trpc.drawing.update.useMutation();
+  const saveFilesMutation = trpc.drawing.saveFiles.useMutation();
 
-  const saveFiles = trpc.drawing.saveFiles.useMutation();
+  const isSaving = updateDrawing.isPending || saveFilesMutation.isPending;
 
-  const debouncedSave = useDebounce((elements: readonly any[], appState: any) => {
-    updateDrawing.mutate({
-      id: drawingId,
-      elements: elements as unknown[],
-      appState: appState
-        ? {
-            viewBackgroundColor: appState.viewBackgroundColor,
-            currentItemStrokeColor: appState.currentItemStrokeColor,
-            currentItemBackgroundColor: appState.currentItemBackgroundColor,
-            currentItemFillStyle: appState.currentItemFillStyle,
-            currentItemStrokeWidth: appState.currentItemStrokeWidth,
-            currentItemStrokeStyle: appState.currentItemStrokeStyle,
-            currentItemRoughness: appState.currentItemRoughness,
-            currentItemOpacity: appState.currentItemOpacity,
-            currentItemFontFamily: appState.currentItemFontFamily,
-            currentItemFontSize: appState.currentItemFontSize,
-            currentItemTextAlign: appState.currentItemTextAlign,
-            currentItemStartArrowhead: appState.currentItemStartArrowhead,
-            currentItemEndArrowhead: appState.currentItemEndArrowhead,
-            currentItemRoundness: appState.currentItemRoundness,
-            gridSize: appState.gridSize,
-            gridStep: appState.gridStep,
-            gridModeEnabled: appState.gridModeEnabled,
-          }
-        : undefined,
-    });
-  }, 1000);
+  const handleSave = async () => {
+    if (!excalidrawAPI) return;
 
-  const handleChange = useCallback(
-    (elements: readonly any[], appState: any, files: any) => {
-      debouncedSave(elements, appState);
+    try {
+      const elements = excalidrawAPI.getSceneElements();
+      const appState = excalidrawAPI.getAppState();
+      const files = excalidrawAPI.getFiles();
 
-      // Handle file uploads
+      // Convert readonly array to plain array for serialization
+      const elementsArray = JSON.parse(JSON.stringify(elements));
+
+      // Save elements and appState
+      await updateDrawing.mutateAsync({
+        id: drawingId,
+        elements: elementsArray,
+        appState: {
+          viewBackgroundColor: appState.viewBackgroundColor,
+          currentItemStrokeColor: appState.currentItemStrokeColor,
+          currentItemBackgroundColor: appState.currentItemBackgroundColor,
+          currentItemFillStyle: appState.currentItemFillStyle,
+          currentItemStrokeWidth: appState.currentItemStrokeWidth,
+          currentItemStrokeStyle: appState.currentItemStrokeStyle,
+          currentItemRoughness: appState.currentItemRoughness,
+          currentItemOpacity: appState.currentItemOpacity,
+          currentItemFontFamily: appState.currentItemFontFamily,
+          currentItemFontSize: appState.currentItemFontSize,
+          currentItemTextAlign: appState.currentItemTextAlign,
+          currentItemStartArrowhead: appState.currentItemStartArrowhead,
+          currentItemEndArrowhead: appState.currentItemEndArrowhead,
+          currentItemRoundness: appState.currentItemRoundness,
+          gridSize: appState.gridSize,
+          gridModeEnabled: appState.gridModeEnabled,
+        },
+      });
+
+      // Save files if any
       if (files && typeof files === 'object') {
-        const newFiles = Object.entries(files)
-
+        const fileEntries = Object.entries(files)
           .filter(([, file]: [string, any]) => file?.dataURL)
-
           .map(([fileId, file]: [string, any]) => ({
             fileId,
             mimeType: file.mimeType,
             dataUrl: file.dataURL,
           }));
 
-        if (newFiles.length > 0) {
-          saveFiles.mutate({
+        if (fileEntries.length > 0) {
+          await saveFilesMutation.mutateAsync({
             drawingId,
-            files: newFiles,
+            files: fileEntries,
           });
         }
       }
-    },
-    [debouncedSave, drawingId, saveFiles]
-  );
+    } catch {
+      // Error is handled by tRPC mutation state
+    }
+  };
 
   // Convert initial files to Excalidraw format
   const initialBinaryFiles = useMemo(() => {
@@ -118,8 +113,6 @@ export function DrawingCanvas({
       }
     : undefined;
 
-  // Handle library changes
-
   const handleLibraryChange = onLibraryChange
     ? (items: any) => onLibraryChange(items as unknown[])
     : undefined;
@@ -127,26 +120,23 @@ export function DrawingCanvas({
   return (
     <div className="relative h-full w-full">
       <div className="absolute right-4 top-4 z-10">
-        {saveStatus === 'saving' && (
-          <Badge variant="secondary" className="gap-1">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Saving...
-          </Badge>
-        )}
-        {saveStatus === 'saved' && (
-          <Badge variant="secondary" className="gap-1 bg-green-100 text-green-800">
-            <Check className="h-3 w-3" />
-            Saved
-          </Badge>
-        )}
-        {saveStatus === 'error' && (
-          <Badge variant="destructive" className="gap-1">
-            Error saving
-          </Badge>
-        )}
+        <Button onClick={handleSave} disabled={isSaving || !excalidrawAPI} size="sm">
+          {isSaving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save
+            </>
+          )}
+        </Button>
       </div>
 
       <ExcalidrawWrapper
+        excalidrawAPI={setExcalidrawAPI}
         initialData={
           {
             elements: initialElements,
@@ -155,7 +145,6 @@ export function DrawingCanvas({
             libraryItems: libraryItems,
           } as any
         }
-        onChange={handleChange}
         onLibraryChange={handleLibraryChange}
       />
     </div>
