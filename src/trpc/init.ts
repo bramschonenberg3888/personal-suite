@@ -1,4 +1,5 @@
 import { initTRPC } from '@trpc/server';
+import superjson from 'superjson';
 import { cache } from 'react';
 import { db } from '@/lib/db';
 
@@ -37,7 +38,9 @@ export const createTRPCContext = cache(async () => {
   };
 });
 
-const t = initTRPC.context<typeof createTRPCContext>().create();
+const t = initTRPC.context<typeof createTRPCContext>().create({
+  transformer: superjson,
+});
 
 export const createTRPCRouter = t.router;
 export const createCallerFactory = t.createCallerFactory;

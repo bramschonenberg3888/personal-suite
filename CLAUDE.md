@@ -19,6 +19,7 @@ src/
 ├── components/
 │   ├── ui/                   # Reusable UI (shadcn/ui)
 │   ├── layout/               # App shell, sidebar
+│   ├── theme/                # Theme provider & toggle (next-themes)
 │   ├── portfolio/            # Stock cards, watchlist
 │   ├── drawing/              # Excalidraw wrapper, canvas
 │   ├── shopper/              # Product search, tracking

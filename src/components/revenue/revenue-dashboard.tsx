@@ -18,10 +18,9 @@ import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/trpc/client';
 import { NotionSettingsDialog } from './notion-settings-dialog';
 import { KpiCards } from './kpi-cards';
-import { RevenueChart } from './revenue-chart';
+import { InteractiveMetricsChart } from './interactive-metrics-chart';
 import { ClientBreakdown } from './client-breakdown';
 import { TypeBreakdown } from './type-breakdown';
-import { RevenueTable } from './revenue-table';
 
 interface DateRange {
   from?: Date;
@@ -297,7 +296,7 @@ export function RevenueDashboard() {
       <KpiCards data={kpiData} isLoading={kpisLoading} />
 
       {/* Charts */}
-      <RevenueChart
+      <InteractiveMetricsChart
         startDate={dateRange.from}
         endDate={dateRange.to}
         clients={selectedClients.length > 0 ? selectedClients : undefined}
@@ -308,6 +307,7 @@ export function RevenueDashboard() {
         <ClientBreakdown
           startDate={dateRange.from}
           endDate={dateRange.to}
+          clients={selectedClients.length > 0 ? selectedClients : undefined}
           types={selectedTypes.length > 0 ? selectedTypes : undefined}
         />
         <TypeBreakdown
@@ -316,14 +316,6 @@ export function RevenueDashboard() {
           clients={selectedClients.length > 0 ? selectedClients : undefined}
         />
       </div>
-
-      {/* Data Table */}
-      <RevenueTable
-        startDate={dateRange.from}
-        endDate={dateRange.to}
-        clients={selectedClients.length > 0 ? selectedClients : undefined}
-        types={selectedTypes.length > 0 ? selectedTypes : undefined}
-      />
     </div>
   );
 }

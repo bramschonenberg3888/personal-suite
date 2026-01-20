@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useTheme } from 'next-themes';
 import { ExcalidrawWrapper } from './excalidraw-wrapper';
 import { trpc } from '@/trpc/client';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ export function DrawingCanvas({
 }: DrawingCanvasProps) {
   const [timestamp] = useState(() => Date.now());
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
+  const { resolvedTheme } = useTheme();
 
   const updateDrawing = trpc.drawing.update.useMutation();
   const saveFilesMutation = trpc.drawing.saveFiles.useMutation();
@@ -137,6 +139,7 @@ export function DrawingCanvas({
 
       <ExcalidrawWrapper
         excalidrawAPI={setExcalidrawAPI}
+        theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
         initialData={
           {
             elements: initialElements,

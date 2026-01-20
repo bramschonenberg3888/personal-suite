@@ -7,6 +7,7 @@ import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
@@ -53,7 +54,8 @@ export function Sidebar() {
 
       <Separator />
 
-      <div className="p-4">
+      <div className="space-y-1 p-4">
+        <ThemeToggle />
         <Button
           variant="ghost"
           className="w-full justify-start gap-3"

@@ -211,6 +211,7 @@ export const revenueRouter = createTRPCRouter({
           endDate: z.date().optional(),
           clients: z.array(z.string()).optional(),
           types: z.array(z.string()).optional(),
+          billable: z.boolean().optional(),
         })
       )
       .query(async ({ ctx, input }) => {
@@ -230,6 +231,10 @@ export const revenueRouter = createTRPCRouter({
 
         if (input.types && input.types.length > 0) {
           where.type = { in: input.types };
+        }
+
+        if (input.billable !== undefined) {
+          where.billable = input.billable;
         }
 
         const entries = await ctx.db.revenueEntry.findMany({
@@ -275,6 +280,7 @@ export const revenueRouter = createTRPCRouter({
           .object({
             startDate: z.date().optional(),
             endDate: z.date().optional(),
+            clients: z.array(z.string()).optional(),
             types: z.array(z.string()).optional(),
           })
           .optional()
@@ -289,6 +295,10 @@ export const revenueRouter = createTRPCRouter({
           where.startTime = {};
           if (input.startDate) where.startTime.gte = input.startDate;
           if (input.endDate) where.startTime.lte = input.endDate;
+        }
+
+        if (input?.clients && input.clients.length > 0) {
+          where.client = { in: input.clients };
         }
 
         if (input?.types && input.types.length > 0) {
