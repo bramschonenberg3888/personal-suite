@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Next.js Boilerplate',
-  description: 'Full-stack Next.js boilerplate with Auth, tRPC, Prisma, and more',
+  title: 'Personal Suite',
+  description: 'Personal productivity and financial suite',
 };
 
 export default function RootLayout({

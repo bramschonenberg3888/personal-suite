@@ -344,8 +344,10 @@ export const drawingRouter = createTRPCRouter({
       .query(async ({ ctx, input }) => {
         const path: { id: string; name: string }[] = [];
         let currentId: string | null = input.folderId;
+        const maxDepth = 50;
+        let depth = 0;
 
-        while (currentId) {
+        while (currentId && depth < maxDepth) {
           const folder: { id: string; name: string; parentId: string | null } | null =
             await ctx.db.drawingFolder.findFirst({
               where: { id: currentId, userId: ctx.userId },
@@ -356,6 +358,7 @@ export const drawingRouter = createTRPCRouter({
 
           path.unshift({ id: folder.id, name: folder.name });
           currentId = folder.parentId;
+          depth++;
         }
 
         return path;
