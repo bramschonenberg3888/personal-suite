@@ -16,41 +16,41 @@ import {
 } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/trpc/client';
-import { NotionSettingsDialog } from './notion-settings-dialog';
-import { KpiCards } from './kpi-cards';
-import { InteractiveMetricsChart } from './interactive-metrics-chart';
-import { ClientBreakdown } from './client-breakdown';
+import { CostsSettingsDialog } from './costs-settings-dialog';
+import { CostsKpiCards } from './costs-kpi-cards';
+import { CostsChart } from './costs-chart';
+import { CostsSectionBreakdown } from './costs-section-breakdown';
 
 interface DateRange {
   from?: Date;
   to?: Date;
 }
 
-export function RevenueDashboard() {
+export function CostsDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>({});
-  const [selectedClients, setSelectedClients] = useState<string[]>([]);
-  const [clientsOpen, setClientsOpen] = useState(false);
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [sectionsOpen, setSectionsOpen] = useState(false);
 
   const utils = trpc.useUtils();
-  const { data: connection, isLoading: connectionLoading } = trpc.revenue.connection.get.useQuery();
+  const { data: connection, isLoading: connectionLoading } = trpc.costs.connection.get.useQuery();
 
-  const { data: filterOptions } = trpc.revenue.entries.filterOptions.useQuery(undefined, {
-    enabled: !!connection,
+  const { data: filterOptions } = trpc.costs.entries.filterOptions.useQuery(undefined, {
+    enabled: !!connection?.costsDatabaseId,
   });
 
-  const { data: kpiData, isLoading: kpisLoading } = trpc.revenue.entries.kpis.useQuery(
+  const { data: kpiData, isLoading: kpisLoading } = trpc.costs.entries.kpis.useQuery(
     {
       startDate: dateRange.from,
       endDate: dateRange.to,
-      clients: selectedClients.length > 0 ? selectedClients : undefined,
+      vatSections: selectedSections.length > 0 ? selectedSections : undefined,
     },
-    { enabled: !!connection }
+    { enabled: !!connection?.costsDatabaseId }
   );
 
-  const syncMutation = trpc.revenue.sync.useMutation({
+  const syncMutation = trpc.costs.sync.useMutation({
     onSuccess: () => {
-      utils.revenue.entries.invalidate();
-      utils.revenue.connection.invalidate();
+      utils.costs.entries.invalidate();
+      utils.costs.connection.invalidate();
     },
   });
 
@@ -60,30 +60,30 @@ export function RevenueDashboard() {
 
   const clearFilters = () => {
     setDateRange({});
-    setSelectedClients([]);
+    setSelectedSections([]);
   };
 
-  const hasFilters = dateRange.from || dateRange.to || selectedClients.length > 0;
+  const hasFilters = dateRange.from || dateRange.to || selectedSections.length > 0;
 
-  const toggleClient = (client: string) => {
-    setSelectedClients((prev) =>
-      prev.includes(client) ? prev.filter((c) => c !== client) : [...prev, client]
+  const toggleSection = (section: string) => {
+    setSelectedSections((prev) =>
+      prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]
     );
   };
 
   // No connection configured
-  if (!connectionLoading && !connection?.revenueDatabaseId) {
+  if (!connectionLoading && !connection?.costsDatabaseId) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <div className="bg-muted rounded-full p-4">
           <Database className="text-muted-foreground h-8 w-8" />
         </div>
-        <h2 className="mt-4 text-xl font-semibold">Connect Your Notion Database</h2>
+        <h2 className="mt-4 text-xl font-semibold">Connect Your Notion Costs Database</h2>
         <p className="text-muted-foreground mt-2 max-w-sm text-center">
-          To get started, connect your Notion time tracking database to sync your revenue data.
+          To get started, connect your Notion costs database to sync your expense data.
         </p>
         <div className="mt-6">
-          <NotionSettingsDialog
+          <CostsSettingsDialog
             trigger={
               <Button size="lg">
                 <Database className="mr-2 h-4 w-4" />
@@ -101,19 +101,19 @@ export function RevenueDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Revenue Overview</h2>
-          {connection?.revenueLastSyncAt && (
+          <h2 className="text-xl font-semibold">Costs Overview</h2>
+          {connection?.costsLastSyncAt && (
             <p className="text-muted-foreground mt-1 text-sm">
               Last synced:{' '}
               {new Intl.DateTimeFormat('nl-NL', {
                 dateStyle: 'medium',
                 timeStyle: 'short',
-              }).format(new Date(connection.revenueLastSyncAt))}
+              }).format(new Date(connection.costsLastSyncAt))}
             </p>
           )}
         </div>
         <div className="flex gap-2">
-          <NotionSettingsDialog />
+          <CostsSettingsDialog />
           <Button onClick={handleSync} disabled={syncMutation.isPending}>
             {syncMutation.isPending ? (
               <>
@@ -173,36 +173,36 @@ export function RevenueDashboard() {
               />
             </div>
 
-            {filterOptions && filterOptions.clients.length > 0 && (
+            {filterOptions && filterOptions.vatSections.length > 0 && (
               <div>
-                <label className="mb-1 block text-sm font-medium">Clients</label>
-                <Popover open={clientsOpen} onOpenChange={setClientsOpen}>
+                <label className="mb-1 block text-sm font-medium">VAT Section</label>
+                <Popover open={sectionsOpen} onOpenChange={setSectionsOpen}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-48 justify-start">
-                      {selectedClients.length > 0 ? (
-                        <span className="truncate">{selectedClients.length} selected</span>
+                      {selectedSections.length > 0 ? (
+                        <span className="truncate">{selectedSections.length} selected</span>
                       ) : (
-                        <span className="text-muted-foreground">All clients</span>
+                        <span className="text-muted-foreground">All sections</span>
                       )}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-48 p-0" align="start">
                     <Command>
-                      <CommandInput placeholder="Search clients..." />
+                      <CommandInput placeholder="Search sections..." />
                       <CommandList>
-                        <CommandEmpty>No clients found.</CommandEmpty>
+                        <CommandEmpty>No sections found.</CommandEmpty>
                         <CommandGroup>
-                          {filterOptions.clients.map((client) => (
-                            <CommandItem key={client} onSelect={() => toggleClient(client)}>
+                          {filterOptions.vatSections.map((section) => (
+                            <CommandItem key={section} onSelect={() => toggleSection(section)}>
                               <div className="flex items-center gap-2">
                                 <div
-                                  className={`flex h-4 w-4 items-center justify-center rounded border ${selectedClients.includes(client) ? 'border-primary bg-primary text-primary-foreground' : 'border-muted'}`}
+                                  className={`flex h-4 w-4 items-center justify-center rounded border ${selectedSections.includes(section) ? 'border-primary bg-primary text-primary-foreground' : 'border-muted'}`}
                                 >
-                                  {selectedClients.includes(client) && (
+                                  {selectedSections.includes(section) && (
                                     <Check className="h-3 w-3" />
                                   )}
                                 </div>
-                                <span className="truncate">{client}</span>
+                                <span className="truncate">{section}</span>
                               </div>
                             </CommandItem>
                           ))}
@@ -224,33 +224,29 @@ export function RevenueDashboard() {
       </Card>
 
       {/* Selected filters */}
-      {selectedClients.length > 0 && (
+      {selectedSections.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selectedClients.map((client) => (
-            <Badge key={client} variant="secondary" className="gap-1">
-              {client}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => toggleClient(client)} />
+          {selectedSections.map((section) => (
+            <Badge key={section} variant="secondary" className="gap-1">
+              {section}
+              <X className="h-3 w-3 cursor-pointer" onClick={() => toggleSection(section)} />
             </Badge>
           ))}
         </div>
       )}
 
       {/* KPI Cards */}
-      <KpiCards data={kpiData} isLoading={kpisLoading} />
+      <CostsKpiCards data={kpiData} isLoading={kpisLoading} />
 
       {/* Charts */}
-      <InteractiveMetricsChart
+      <CostsChart
         startDate={dateRange.from}
         endDate={dateRange.to}
-        clients={selectedClients.length > 0 ? selectedClients : undefined}
+        vatSections={selectedSections.length > 0 ? selectedSections : undefined}
       />
 
-      {/* Client Breakdown */}
-      <ClientBreakdown
-        startDate={dateRange.from}
-        endDate={dateRange.to}
-        clients={selectedClients.length > 0 ? selectedClients : undefined}
-      />
+      {/* Section Breakdown */}
+      <CostsSectionBreakdown startDate={dateRange.from} endDate={dateRange.to} />
     </div>
   );
 }

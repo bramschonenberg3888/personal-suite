@@ -19,10 +19,10 @@ export const revenueRouter = createTRPCRouter({
           where: { userId: ctx.userId },
           create: {
             userId: ctx.userId,
-            databaseId: input.databaseId,
+            revenueDatabaseId: input.databaseId,
           },
           update: {
-            databaseId: input.databaseId,
+            revenueDatabaseId: input.databaseId,
           },
         });
       }),
@@ -40,11 +40,11 @@ export const revenueRouter = createTRPCRouter({
       where: { userId: ctx.userId },
     });
 
-    if (!connection) {
+    if (!connection?.revenueDatabaseId) {
       throw new Error('No Notion connection configured. Please set up your database ID first.');
     }
 
-    const entries = await fetchAllTimeEntries(connection.databaseId);
+    const entries = await fetchAllTimeEntries(connection.revenueDatabaseId);
 
     // Upsert all entries
     for (const entry of entries) {
@@ -101,7 +101,7 @@ export const revenueRouter = createTRPCRouter({
     // Update last sync timestamp
     await ctx.db.notionConnection.update({
       where: { userId: ctx.userId },
-      data: { lastSyncAt: new Date() },
+      data: { revenueLastSyncAt: new Date() },
     });
 
     return { synced: entries.length };

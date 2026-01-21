@@ -15,34 +15,34 @@ import {
 } from '@/components/ui/dialog';
 import { trpc } from '@/trpc/client';
 
-interface NotionSettingsDialogProps {
+interface CostsSettingsDialogProps {
   trigger?: React.ReactNode;
 }
 
-export function NotionSettingsDialog({ trigger }: NotionSettingsDialogProps) {
+export function CostsSettingsDialog({ trigger }: CostsSettingsDialogProps) {
   const [open, setOpen] = useState(false);
   const [databaseId, setDatabaseId] = useState('');
   const [testDatabaseId, setTestDatabaseId] = useState('');
 
   const utils = trpc.useUtils();
-  const { data: connection } = trpc.revenue.connection.get.useQuery();
+  const { data: connection } = trpc.costs.connection.get.useQuery();
 
-  const { data: validation, isLoading: validating } = trpc.revenue.connection.validate.useQuery(
+  const { data: validation, isLoading: validating } = trpc.costs.connection.validate.useQuery(
     { databaseId: testDatabaseId },
     { enabled: testDatabaseId.length > 0 }
   );
 
-  const saveMutation = trpc.revenue.connection.save.useMutation({
+  const saveMutation = trpc.costs.connection.save.useMutation({
     onSuccess: () => {
-      utils.revenue.connection.get.invalidate();
+      utils.costs.connection.get.invalidate();
       setOpen(false);
     },
   });
 
   const handleOpen = (isOpen: boolean) => {
     setOpen(isOpen);
-    if (isOpen && connection?.revenueDatabaseId) {
-      setDatabaseId(connection.revenueDatabaseId);
+    if (isOpen && connection?.costsDatabaseId) {
+      setDatabaseId(connection.costsDatabaseId);
     }
   };
 
@@ -86,9 +86,9 @@ export function NotionSettingsDialog({ trigger }: NotionSettingsDialogProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Notion Connection</DialogTitle>
+          <DialogTitle>Notion Costs Connection</DialogTitle>
           <DialogDescription>
-            Connect your Notion time tracking database to sync revenue data.
+            Connect your Notion costs database to sync expense data.
           </DialogDescription>
         </DialogHeader>
 
@@ -136,7 +136,7 @@ export function NotionSettingsDialog({ trigger }: NotionSettingsDialogProps) {
             </div>
           )}
 
-          <div className="text-muted-foreground rounded-md bg-muted p-3 text-xs">
+          <div className="text-muted-foreground bg-muted rounded-md p-3 text-xs">
             <p className="mb-2 font-medium">Setup instructions:</p>
             <ol className="list-inside list-decimal space-y-1">
               <li>
@@ -145,13 +145,13 @@ export function NotionSettingsDialog({ trigger }: NotionSettingsDialogProps) {
                   href="https://www.notion.so/my-integrations"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                  className="text-primary inline-flex items-center gap-1 hover:underline"
                 >
                   notion.so/my-integrations
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </li>
-              <li>Share your time tracking database with the integration</li>
+              <li>Share your costs database with the integration</li>
               <li>Copy the database URL and paste it above</li>
             </ol>
           </div>

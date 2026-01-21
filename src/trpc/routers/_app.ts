@@ -5,6 +5,7 @@ import { drawingRouter } from './drawing';
 import { shopperRouter } from './shopper';
 import { weatherRouter } from './weather';
 import { revenueRouter } from './revenue';
+import { costsRouter } from './costs';
 
 export const appRouter = createTRPCRouter({
   hello: baseProcedure.input(z.object({ name: z.string() }).optional()).query(({ input }) => ({
@@ -16,6 +17,7 @@ export const appRouter = createTRPCRouter({
   shopper: shopperRouter,
   weather: weatherRouter,
   revenue: revenueRouter,
+  costs: costsRouter,
 });
 
 export type AppRouter = typeof appRouter;

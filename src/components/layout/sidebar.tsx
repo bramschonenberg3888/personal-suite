@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LineChart, Pencil, ShoppingCart, Cloud, Home, LogOut, DollarSign } from 'lucide-react';
+import { LineChart, Pencil, ShoppingCart, Cloud, Home, LogOut, Wallet } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { ThemeToggle } from '@/components/theme/theme-toggle';
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/portfolio', label: 'Portfolio', icon: LineChart },
-  { href: '/revenue', label: 'Revenue', icon: DollarSign },
+  { href: '/finance', label: 'Finance', icon: Wallet },
   { href: '/drawings', label: 'Drawings', icon: Pencil },
   { href: '/shopper', label: 'Shopper', icon: ShoppingCart },
   { href: '/weather', label: 'Weather', icon: Cloud },

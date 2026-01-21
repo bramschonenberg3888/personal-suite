@@ -56,6 +56,7 @@ model User {
   location         UserLocation?
   notionConnection NotionConnection?
   revenueEntries   RevenueEntry[]
+  costEntries      CostEntry[]
 }
 
 model VerificationToken {
@@ -211,15 +212,17 @@ model UserLocation {
   updatedAt DateTime @updatedAt
 }
 
-// ===== REVENUE TRACKER =====
+// ===== FINANCE TRACKER =====
 model NotionConnection {
-  id         String    @id @default(cuid())
-  userId     String    @unique
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  databaseId String
-  lastSyncAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revenueDatabaseId String?
+  revenueLastSyncAt DateTime?
+  costsDatabaseId   String?
+  costsLastSyncAt   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model RevenueEntry {
@@ -251,4 +254,25 @@ model RevenueEntry {
   @@index([userId])
   @@index([userId, year])
   @@index([startTime])
+}
+
+model CostEntry {
+  id            String    @id @default(cuid())
+  notionPageId  String    @unique
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  vat           Float?
+  amountExclVat Float?
+  invoiceDate   DateTime?
+  year          Int?
+  quarter       String?
+  description   String?
+  vatRemarks    String?
+  vatSection    String?
+  syncedAt      DateTime  @default(now())
+
+  @@index([userId])
+  @@index([userId, year])
+  @@index([invoiceDate])
 }
