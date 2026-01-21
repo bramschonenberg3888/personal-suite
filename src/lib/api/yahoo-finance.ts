@@ -1,5 +1,69 @@
 import YahooFinance from 'yahoo-finance2';
 
+// Simple in-memory cache with TTL
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+class SimpleCache {
+  private cache = new Map<string, CacheEntry<unknown>>();
+  private defaultTTL: number;
+
+  constructor(defaultTTLSeconds = 60) {
+    this.defaultTTL = defaultTTLSeconds * 1000;
+  }
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.data as T;
+  }
+
+  set<T>(key: string, data: T, ttlSeconds?: number): void {
+    const ttl = ttlSeconds ? ttlSeconds * 1000 : this.defaultTTL;
+    this.cache.set(key, {
+      data,
+      expiresAt: Date.now() + ttl,
+    });
+  }
+
+  has(key: string): boolean {
+    return this.get(key) !== null;
+  }
+
+  // Clean up expired entries periodically
+  cleanup(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      if (now > entry.expiresAt) {
+        this.cache.delete(key);
+      }
+    }
+  }
+}
+
+// Cache instances with different TTLs
+const quoteCache = new SimpleCache(30); // 30 seconds for real-time quotes
+const summaryCache = new SimpleCache(300); // 5 minutes for summaries
+const searchCache = new SimpleCache(600); // 10 minutes for search results
+
+// Cleanup expired entries every 5 minutes
+setInterval(
+  () => {
+    quoteCache.cleanup();
+    summaryCache.cleanup();
+    searchCache.cleanup();
+  },
+  5 * 60 * 1000
+);
+
 export interface QuoteResult {
   symbol: string;
   shortName: string;
@@ -54,6 +118,33 @@ export interface NewsItem {
   relatedTickers?: string[];
 }
 
+export interface ETFHolding {
+  symbol?: string;
+  holdingName: string;
+  holdingPercent: number;
+}
+
+export interface SectorWeighting {
+  sector: string;
+  weight: number;
+}
+
+export interface ETFTopHoldings {
+  holdings: ETFHolding[];
+  sectorWeightings: SectorWeighting[];
+  stockPosition?: number;
+  bondPosition?: number;
+  cashPosition?: number;
+  otherPosition?: number;
+}
+
+export interface ETFFundProfile {
+  family?: string;
+  categoryName?: string;
+  legalType?: string;
+  annualReportExpenseRatio?: number;
+}
+
 export interface QuoteSummary {
   // Basic info
   symbol: string;
@@ -105,6 +196,11 @@ export interface QuoteSummary {
   // Volume stats
   averageVolume?: number;
   averageVolume10days?: number;
+
+  // ETF-specific fields
+  totalAssets?: number; // AUM
+  topHoldings?: ETFTopHoldings;
+  fundProfile?: ETFFundProfile;
 }
 
 // Create yahoo-finance instance with suppressed notices
@@ -118,12 +214,19 @@ const yahooFinance = new YahooFinance({
 export async function getQuotes(symbols: string[]): Promise<QuoteResult[]> {
   if (symbols.length === 0) return [];
 
+  // Check cache first
+  const cacheKey = `quotes:${symbols.sort().join(',')}`;
+  const cached = quoteCache.get<QuoteResult[]>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const results = await yahooFinance.quote(symbols);
 
   // Handle both single and multiple results
   const quotes = Array.isArray(results) ? results : [results];
 
-  return quotes.map((quote) => ({
+  const mapped = quotes.map((quote) => ({
     symbol: quote.symbol,
     shortName: quote.shortName || quote.symbol,
     longName: quote.longName,
@@ -140,10 +243,20 @@ export async function getQuotes(symbols: string[]): Promise<QuoteResult[]> {
     exchange: quote.exchange || '',
     quoteType: quote.quoteType || 'EQUITY',
   }));
+
+  quoteCache.set(cacheKey, mapped);
+  return mapped;
 }
 
 export async function searchSecurities(query: string): Promise<SearchResult[]> {
   if (!query || query.length < 1) return [];
+
+  // Check cache first
+  const cacheKey = `search:${query.toLowerCase()}`;
+  const cached = searchCache.get<SearchResult[]>(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
   const results = await yahooFinance.search(query, {
     quotesCount: 10,
@@ -152,7 +265,7 @@ export async function searchSecurities(query: string): Promise<SearchResult[]> {
 
   const quotes = results.quotes || [];
 
-  return quotes
+  const mapped = quotes
     .filter((q) => q.quoteType === 'EQUITY' || q.quoteType === 'ETF')
     .map(
       (quote): SearchResult => ({
@@ -165,6 +278,9 @@ export async function searchSecurities(query: string): Promise<SearchResult[]> {
         exchDisp: String(quote.exchDisp || ''),
       })
     );
+
+  searchCache.set(cacheKey, mapped);
+  return mapped;
 }
 
 export async function getHistoricalData(
@@ -192,12 +308,13 @@ export async function getHistoricalData(
   }));
 }
 
-export async function getNews(symbols: string[]): Promise<NewsItem[]> {
-  if (symbols.length === 0) return [];
+export async function getNews(symbols: string[], searchByName?: string): Promise<NewsItem[]> {
+  if (symbols.length === 0 && !searchByName) return [];
 
   // Use search endpoint with news to get related news
-  const symbol = symbols[0];
-  const results = await yahooFinance.search(symbol, {
+  // For ETFs, searching by name works better than by symbol
+  const searchQuery = searchByName || symbols[0];
+  const results = await yahooFinance.search(searchQuery, {
     quotesCount: 0,
     newsCount: 10,
   });
@@ -216,20 +333,108 @@ export async function getNews(symbols: string[]): Promise<NewsItem[]> {
 }
 
 export async function getQuoteSummary(symbol: string): Promise<QuoteSummary> {
-  const result = await yahooFinance.quoteSummary(symbol, {
-    modules: ['price', 'summaryDetail', 'defaultKeyStatistics', 'assetProfile'],
+  // Check cache first
+  const cacheKey = `summary:${symbol.toUpperCase()}`;
+  const cached = summaryCache.get<QuoteSummary>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  // First, get basic quote to determine the type
+  const basicResult = await yahooFinance.quoteSummary(symbol, {
+    modules: ['price'],
   });
+
+  const quoteType = basicResult.price?.quoteType || 'EQUITY';
+  const isETF = quoteType === 'ETF' || quoteType === 'MUTUALFUND';
+
+  // Determine modules based on security type
+  const modules: (
+    | 'price'
+    | 'summaryDetail'
+    | 'defaultKeyStatistics'
+    | 'assetProfile'
+    | 'topHoldings'
+    | 'fundProfile'
+  )[] = ['price', 'summaryDetail', 'defaultKeyStatistics'];
+
+  if (isETF) {
+    modules.push('topHoldings', 'fundProfile');
+  } else {
+    modules.push('assetProfile');
+  }
+
+  const result = await yahooFinance.quoteSummary(symbol, { modules });
 
   const price = result.price;
   const summaryDetail = result.summaryDetail;
   const keyStats = result.defaultKeyStatistics;
   const profile = result.assetProfile;
+  const topHoldingsData = result.topHoldings;
+  const fundProfileData = result.fundProfile;
 
   if (!price) {
     throw new Error(`No data found for symbol: ${symbol}`);
   }
 
-  return {
+  // Parse ETF top holdings if available
+  let topHoldings: ETFTopHoldings | undefined;
+  if (topHoldingsData) {
+    const holdings: ETFHolding[] = (topHoldingsData.holdings || []).map((h: any) => ({
+      symbol: h.symbol || undefined,
+      holdingName: h.holdingName || 'Unknown',
+      holdingPercent: (h.holdingPercent || 0) * 100,
+    }));
+
+    const sectorWeightings: SectorWeighting[] = [];
+    if (topHoldingsData.sectorWeightings) {
+      for (const sw of topHoldingsData.sectorWeightings) {
+        // Each sector weighting is an object with the sector name as key
+        for (const [sector, weight] of Object.entries(sw)) {
+          if (typeof weight === 'number') {
+            sectorWeightings.push({ sector, weight: weight * 100 });
+          }
+        }
+      }
+    }
+
+    topHoldings = {
+      holdings,
+      sectorWeightings,
+      stockPosition:
+        typeof topHoldingsData.stockPosition === 'number'
+          ? topHoldingsData.stockPosition * 100
+          : undefined,
+      bondPosition:
+        typeof topHoldingsData.bondPosition === 'number'
+          ? topHoldingsData.bondPosition * 100
+          : undefined,
+      cashPosition:
+        typeof topHoldingsData.cashPosition === 'number'
+          ? topHoldingsData.cashPosition * 100
+          : undefined,
+      otherPosition:
+        typeof topHoldingsData.otherPosition === 'number'
+          ? topHoldingsData.otherPosition * 100
+          : undefined,
+    };
+  }
+
+  // Parse fund profile if available
+  let fundProfile: ETFFundProfile | undefined;
+  if (fundProfileData) {
+    fundProfile = {
+      family: fundProfileData.family || undefined,
+      categoryName: fundProfileData.categoryName || undefined,
+      legalType: fundProfileData.legalType || undefined,
+      annualReportExpenseRatio:
+        typeof fundProfileData.feesExpensesInvestment?.annualReportExpenseRatio === 'number'
+          ? fundProfileData.feesExpensesInvestment.annualReportExpenseRatio * 100
+          : undefined,
+    };
+  }
+
+  const summary: QuoteSummary = {
     // Basic info
     symbol: price.symbol || symbol,
     shortName: price.shortName || symbol,
@@ -280,5 +485,13 @@ export async function getQuoteSummary(symbol: string): Promise<QuoteSummary> {
     // Volume stats
     averageVolume: summaryDetail?.averageVolume,
     averageVolume10days: summaryDetail?.averageVolume10days,
+
+    // ETF-specific fields
+    totalAssets: keyStats?.totalAssets,
+    topHoldings,
+    fundProfile,
   };
+
+  summaryCache.set(cacheKey, summary);
+  return summary;
 }

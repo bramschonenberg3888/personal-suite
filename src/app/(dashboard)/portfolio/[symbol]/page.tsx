@@ -8,6 +8,7 @@ import { StockHeader } from '@/components/portfolio/stock-header';
 import { PriceChart } from '@/components/portfolio/price-chart';
 import { KeyStatistics } from '@/components/portfolio/key-statistics';
 import { CompanyProfile } from '@/components/portfolio/company-profile';
+import { ETFOverview } from '@/components/portfolio/etf-overview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 
@@ -25,8 +26,23 @@ export default function StockDetailPage({ params }: StockDetailPageProps) {
     error: summaryError,
   } = trpc.portfolio.prices.getSummary.useQuery({ symbol });
 
+  // Get portfolio items to find the ISIN for this symbol
+  const { data: portfolioItems } = trpc.portfolio.items.getAll.useQuery();
+  const portfolioItem = portfolioItems?.find((item) => item.symbol === symbol);
+
+  const isETF = summary?.quoteType === 'ETF' || summary?.quoteType === 'MUTUALFUND';
+
+  // Fetch ETF profile if this is an ETF
+  const { data: etfProfile, isLoading: isEtfLoading } = trpc.portfolio.etf.getProfile.useQuery(
+    { symbol, isin: portfolioItem?.isin },
+    { enabled: isETF && !isSummaryLoading }
+  );
+
+  // For ETFs, search news by fund name for better results
+  const newsSearchName = isETF ? summary?.longName || summary?.shortName : undefined;
   const { data: news, isLoading: isNewsLoading } = trpc.portfolio.news.getBySymbols.useQuery({
     symbols: [symbol],
+    searchByName: newsSearchName,
   });
 
   if (isSummaryLoading) {
@@ -57,9 +73,26 @@ export default function StockDetailPage({ params }: StockDetailPageProps) {
 
       <PriceChart symbol={symbol} currency={summary.currency} />
 
-      <KeyStatistics summary={summary} />
-
-      <CompanyProfile summary={summary} />
+      {isETF ? (
+        isEtfLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : etfProfile ? (
+          <ETFOverview profile={etfProfile} currency={summary.currency} />
+        ) : (
+          // Fallback to standard components if no ETF profile available
+          <>
+            <KeyStatistics summary={summary} />
+            <CompanyProfile summary={summary} />
+          </>
+        )
+      ) : (
+        <>
+          <KeyStatistics summary={summary} />
+          <CompanyProfile summary={summary} />
+        </>
+      )}
 
       <Card>
         <CardHeader>

@@ -206,7 +206,7 @@ export const revenueRouter = createTRPCRouter({
     byPeriod: protectedProcedure
       .input(
         z.object({
-          groupBy: z.enum(['month', 'quarter', 'year']),
+          groupBy: z.enum(['week', 'month', 'quarter', 'year']),
           startDate: z.date().optional(),
           endDate: z.date().optional(),
           clients: z.array(z.string()).optional(),
@@ -239,7 +239,7 @@ export const revenueRouter = createTRPCRouter({
 
         const entries = await ctx.db.revenueEntry.findMany({
           where,
-          orderBy: [{ year: 'asc' }, { monthNumber: 'asc' }],
+          orderBy: [{ year: 'asc' }, { monthNumber: 'asc' }, { week: 'asc' }],
         });
 
         // Group entries by period
@@ -248,6 +248,12 @@ export const revenueRouter = createTRPCRouter({
         for (const entry of entries) {
           let key: string;
           switch (input.groupBy) {
+            case 'week':
+              key =
+                entry.year && entry.week
+                  ? `${entry.year}-W${String(entry.week).padStart(2, '0')}`
+                  : 'Unknown';
+              break;
             case 'month':
               key = entry.year && entry.month ? `${entry.year}-${entry.month}` : 'Unknown';
               break;
@@ -281,7 +287,6 @@ export const revenueRouter = createTRPCRouter({
             startDate: z.date().optional(),
             endDate: z.date().optional(),
             clients: z.array(z.string()).optional(),
-            types: z.array(z.string()).optional(),
           })
           .optional()
       )
@@ -299,10 +304,6 @@ export const revenueRouter = createTRPCRouter({
 
         if (input?.clients && input.clients.length > 0) {
           where.client = { in: input.clients };
-        }
-
-        if (input?.types && input.types.length > 0) {
-          where.type = { in: input.types };
         }
 
         const entries = await ctx.db.revenueEntry.findMany({ where });

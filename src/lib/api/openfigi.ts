@@ -99,12 +99,28 @@ export async function mapIsin(isin: string): Promise<FigiMapping[]> {
 
 /**
  * Gets the best ticker match for an ISIN
- * Prioritizes US exchanges, then other major exchanges
+ * Prioritizes based on security type and region:
+ * - For ETPs (ETFs): prefer European exchanges for UCITS ETFs, then major US exchanges
+ * - For stocks: prefer US exchanges, then European
  */
-export function getBestTicker(mappings: FigiMapping[]): FigiMapping | null {
+export function getBestTicker(mappings: FigiMapping[], isin?: string): FigiMapping | null {
   if (mappings.length === 0) return null;
 
-  // Priority order for exchanges
+  // Check if this is a European UCITS ETF (Irish or Luxembourg domiciled)
+  const isEuropeanFund = isin && (isin.startsWith('IE') || isin.startsWith('LU'));
+  const isETP = mappings.some((m) => m.securityType === 'ETP');
+
+  // For European ETFs, prioritize European exchanges
+  // NA = Euronext Amsterdam, LN = London, GY = Germany/Xetra, SW = Switzerland, FP = Paris, IM = Italy
+  if (isEuropeanFund && isETP) {
+    const europeanExchanges = ['NA', 'LN', 'GY', 'SW', 'FP', 'IM'];
+    for (const exchCode of europeanExchanges) {
+      const match = mappings.find((m) => m.exchCode === exchCode);
+      if (match) return match;
+    }
+  }
+
+  // Default priority: US exchanges first, then European
   const exchangePriority = ['US', 'UN', 'UQ', 'UA', 'UW', 'UR', 'LN', 'GY', 'FP', 'NA', 'JP'];
 
   for (const exchCode of exchangePriority) {

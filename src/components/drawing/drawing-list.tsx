@@ -1,10 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { trpc } from '@/trpc/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -22,23 +20,50 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, MoreVertical, Pencil, Trash2, FileImage, FolderInput } from 'lucide-react';
+import {
+  Plus,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  FileImage,
+  FolderInput,
+  Folder,
+  FolderPlus,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { FolderBreadcrumbs } from './folder-breadcrumbs';
-import { FolderCard } from './folder-card';
 import { CreateFolderDialog } from './create-folder-dialog';
 import { MoveToFolderDialog } from './move-to-folder-dialog';
+
+type SortField = 'name' | 'updatedAt';
+type SortDirection = 'asc' | 'desc';
 
 export function DrawingList() {
   const router = useRouter();
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [newDrawingName, setNewDrawingName] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editingDrawing, setEditingDrawing] = useState<{
+  const [editingItem, setEditingItem] = useState<{
     id: string;
     name: string;
+    type: 'drawing' | 'folder';
   } | null>(null);
+
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>('updatedAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // Move dialog state
   const [moveItem, setMoveItem] = useState<{
@@ -66,7 +91,7 @@ export function DrawingList() {
   const updateDrawing = trpc.drawing.update.useMutation({
     onSuccess: () => {
       utils.drawing.folder.getContents.invalidate();
-      setEditingDrawing(null);
+      setEditingItem(null);
     },
   });
 
@@ -95,6 +120,7 @@ export function DrawingList() {
   const renameFolder = trpc.drawing.folder.rename.useMutation({
     onSuccess: () => {
       utils.drawing.folder.getContents.invalidate();
+      setEditingItem(null);
     },
   });
 
@@ -116,8 +142,14 @@ export function DrawingList() {
     createFolder.mutate({ name, parentId: currentFolderId });
   };
 
-  const handleRenameFolder = (id: string, name: string) => {
-    renameFolder.mutate({ id, name });
+  const handleRenameItem = () => {
+    if (!editingItem || !editingItem.name.trim()) return;
+
+    if (editingItem.type === 'drawing') {
+      updateDrawing.mutate({ id: editingItem.id, name: editingItem.name.trim() });
+    } else {
+      renameFolder.mutate({ id: editingItem.id, name: editingItem.name.trim() });
+    }
   };
 
   const handleMoveItem = (folderId: string | null) => {
@@ -130,15 +162,39 @@ export function DrawingList() {
     }
   };
 
-  const handleDeleteFolder = (id: string) => {
-    deleteFolder.mutate({ id });
+  const handleDeleteItem = (id: string, type: 'drawing' | 'folder') => {
+    if (type === 'drawing') {
+      deleteDrawing.mutate({ id });
+    } else {
+      deleteFolder.mutate({ id });
+    }
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'name' ? 'asc' : 'desc');
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="ml-1 h-4 w-4 text-muted-foreground" />;
+    }
+    return sortDirection === 'asc' ? (
+      <ArrowUp className="ml-1 h-4 w-4" />
+    ) : (
+      <ArrowDown className="ml-1 h-4 w-4" />
+    );
   };
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-40" />
+      <div className="space-y-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-12 w-full" />
         ))}
       </div>
     );
@@ -146,7 +202,40 @@ export function DrawingList() {
 
   const folders = contents?.folders ?? [];
   const drawings = contents?.drawings ?? [];
-  const hasContent = folders.length > 0 || drawings.length > 0;
+
+  // Combine and sort items
+  type ListItem = {
+    id: string;
+    name: string;
+    type: 'folder' | 'drawing';
+    updatedAt: Date | string;
+    parentId?: string | null;
+    folderId?: string | null;
+  };
+
+  const allItems: ListItem[] = [
+    ...folders.map((f) => ({ ...f, type: 'folder' as const })),
+    ...drawings.map((d) => ({ ...d, type: 'drawing' as const })),
+  ];
+
+  const sortedItems = [...allItems].sort((a, b) => {
+    // Folders always come first
+    if (a.type !== b.type) {
+      return a.type === 'folder' ? -1 : 1;
+    }
+
+    // Then sort by the selected field
+    let comparison = 0;
+    if (sortField === 'name') {
+      comparison = a.name.localeCompare(b.name);
+    } else {
+      comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+    }
+
+    return sortDirection === 'asc' ? comparison : -comparison;
+  });
+
+  const hasContent = sortedItems.length > 0;
 
   return (
     <div className="space-y-4">
@@ -204,149 +293,172 @@ export function DrawingList() {
       </div>
 
       {hasContent ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {/* Folders first */}
-          {folders.map((folder) => (
-            <FolderCard
-              key={folder.id}
-              folder={folder}
-              onNavigate={setCurrentFolderId}
-              onRename={handleRenameFolder}
-              onMove={(id) =>
-                setMoveItem({
-                  id,
-                  type: 'folder',
-                  name: folder.name,
-                  currentFolderId: folder.parentId,
-                })
-              }
-              onDelete={handleDeleteFolder}
-              isPending={renameFolder.isPending}
-            />
-          ))}
-
-          {/* Then drawings */}
-          {drawings.map((drawing) => (
-            <Card key={drawing.id} className="group relative hover:bg-accent/50 transition-colors">
-              <Link href={`/drawings/${drawing.id}`}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <FileImage className="h-5 w-5 text-muted-foreground" />
-                    <CardTitle className="text-lg">{drawing.name}</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Updated{' '}
-                    {formatDistanceToNow(new Date(drawing.updatedAt), {
-                      addSuffix: true,
-                    })}
-                  </p>
-                </CardContent>
-              </Link>
-
-              <div className="absolute right-2 top-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setEditingDrawing({
-                          id: drawing.id,
-                          name: drawing.name,
-                        });
-                      }}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Rename
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setMoveItem({
-                          id: drawing.id,
-                          type: 'drawing',
-                          name: drawing.name,
-                          currentFolderId: drawing.folderId,
-                        });
-                      }}
-                    >
-                      <FolderInput className="mr-2 h-4 w-4" />
-                      Move
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.preventDefault();
-                        deleteDrawing.mutate({ id: drawing.id });
-                      }}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </Card>
-          ))}
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[50%]">
+                  <button
+                    onClick={() => handleSort('name')}
+                    className="flex items-center hover:text-foreground transition-colors"
+                  >
+                    Name
+                    {getSortIcon('name')}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    onClick={() => handleSort('updatedAt')}
+                    className="flex items-center hover:text-foreground transition-colors"
+                  >
+                    Modified
+                    {getSortIcon('updatedAt')}
+                  </button>
+                </TableHead>
+                <TableHead className="w-[50px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedItems.map((item) => (
+                <TableRow
+                  key={`${item.type}-${item.id}`}
+                  className="cursor-pointer"
+                  onClick={() => {
+                    if (item.type === 'folder') {
+                      setCurrentFolderId(item.id);
+                    } else {
+                      router.push(`/drawings/${item.id}`);
+                    }
+                  }}
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      {item.type === 'folder' ? (
+                        <Folder className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <FileImage className="h-5 w-5 text-muted-foreground" />
+                      )}
+                      <span className="font-medium">{item.name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatDistanceToNow(new Date(item.updatedAt), { addSuffix: true })}
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingItem({
+                              id: item.id,
+                              name: item.name,
+                              type: item.type,
+                            });
+                          }}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMoveItem({
+                              id: item.id,
+                              type: item.type,
+                              name: item.name,
+                              currentFolderId:
+                                item.type === 'folder'
+                                  ? (item.parentId ?? null)
+                                  : (item.folderId ?? null),
+                            });
+                          }}
+                        >
+                          <FolderInput className="mr-2 h-4 w-4" />
+                          Move
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteItem(item.id, item.type);
+                          }}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       ) : (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <FileImage className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-4">
-              {currentFolderId ? 'This folder is empty.' : "You don't have any drawings yet."}
-            </p>
+        <div className="rounded-md border p-8 text-center">
+          <FileImage className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <p className="text-muted-foreground mb-4">
+            {currentFolderId ? 'This folder is empty.' : "You don't have any drawings yet."}
+          </p>
+          <div className="flex items-center justify-center gap-2">
             <Button onClick={() => setCreateDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              {currentFolderId ? 'Create Drawing Here' : 'Create Your First Drawing'}
+              {currentFolderId ? 'Create Drawing' : 'Create Your First Drawing'}
             </Button>
-          </CardContent>
-        </Card>
+            <CreateFolderDialog
+              onCreateFolder={handleCreateFolder}
+              isPending={createFolder.isPending}
+              trigger={
+                <Button variant="outline">
+                  <FolderPlus className="mr-2 h-4 w-4" />
+                  New Folder
+                </Button>
+              }
+            />
+          </div>
+        </div>
       )}
 
       {/* Rename Dialog */}
-      <Dialog open={!!editingDrawing} onOpenChange={(open) => !open && setEditingDrawing(null)}>
+      <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename Drawing</DialogTitle>
-            <DialogDescription>Enter a new name for this drawing.</DialogDescription>
+            <DialogTitle>
+              Rename {editingItem?.type === 'folder' ? 'Folder' : 'Drawing'}
+            </DialogTitle>
+            <DialogDescription>
+              Enter a new name for this {editingItem?.type === 'folder' ? 'folder' : 'drawing'}.
+            </DialogDescription>
           </DialogHeader>
           <Input
-            value={editingDrawing?.name ?? ''}
+            value={editingItem?.name ?? ''}
             onChange={(e) =>
-              setEditingDrawing((prev) => (prev ? { ...prev, name: e.target.value } : null))
+              setEditingItem((prev) => (prev ? { ...prev, name: e.target.value } : null))
             }
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && editingDrawing?.name.trim()) {
-                updateDrawing.mutate({
-                  id: editingDrawing.id,
-                  name: editingDrawing.name.trim(),
-                });
+              if (e.key === 'Enter' && editingItem?.name.trim()) {
+                handleRenameItem();
               }
             }}
             autoFocus
           />
           <DialogFooter>
             <Button
-              onClick={() => {
-                if (editingDrawing?.name.trim()) {
-                  updateDrawing.mutate({
-                    id: editingDrawing.id,
-                    name: editingDrawing.name.trim(),
-                  });
-                }
-              }}
-              disabled={!editingDrawing?.name.trim() || updateDrawing.isPending}
+              onClick={handleRenameItem}
+              disabled={
+                !editingItem?.name.trim() || updateDrawing.isPending || renameFolder.isPending
+              }
             >
               Save
             </Button>

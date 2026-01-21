@@ -54,38 +54,48 @@ function getNotionClient(): Client {
   return new Client({ auth: env.NOTION_API_KEY });
 }
 
-function extractPropertyValue(
-  property: PageObjectResponse['properties'][string]
-): string | number | boolean | Date | null {
+interface ExtractedValue {
+  value: string | number | boolean | Date | null;
+  relationIds?: string[];
+}
+
+function extractPropertyValue(property: PageObjectResponse['properties'][string]): ExtractedValue {
   switch (property.type) {
     case 'title':
-      return property.title.map((t) => t.plain_text).join('') || null;
+      return { value: property.title.map((t) => t.plain_text).join('') || null };
     case 'rich_text':
-      return property.rich_text.map((t) => t.plain_text).join('') || null;
+      return { value: property.rich_text.map((t) => t.plain_text).join('') || null };
     case 'number':
-      return property.number;
+      return { value: property.number };
     case 'checkbox':
-      return property.checkbox;
+      return { value: property.checkbox };
     case 'date':
-      return property.date?.start ? new Date(property.date.start) : null;
+      return { value: property.date?.start ? new Date(property.date.start) : null };
     case 'select':
-      return property.select?.name || null;
+      return { value: property.select?.name || null };
+    case 'relation': {
+      // Return the first relation's page ID; we'll resolve names later
+      const relationIds = property.relation.map((r) => r.id);
+      return { value: null, relationIds };
+    }
     case 'formula':
       if (property.formula.type === 'number') {
-        return property.formula.number;
+        return { value: property.formula.number };
       }
       if (property.formula.type === 'string') {
-        return property.formula.string;
+        return { value: property.formula.string };
       }
       if (property.formula.type === 'boolean') {
-        return property.formula.boolean;
+        return { value: property.formula.boolean };
       }
       if (property.formula.type === 'date') {
-        return property.formula.date?.start ? new Date(property.formula.date.start) : null;
+        return {
+          value: property.formula.date?.start ? new Date(property.formula.date.start) : null,
+        };
       }
-      return null;
+      return { value: null };
     default:
-      return null;
+      return { value: null };
   }
 }
 
@@ -112,42 +122,56 @@ function extractMonthNumber(month: string | null): number | null {
   return dutchMonths[monthLower] ?? null;
 }
 
-function parseTimeEntry(page: PageObjectResponse): TimeEntry {
+interface ParsedEntry {
+  entry: TimeEntry;
+  clientRelationIds?: string[];
+}
+
+function parseTimeEntry(page: PageObjectResponse): ParsedEntry {
   const props = page.properties;
 
   // Build a map of internal names to values
   const values: Record<string, string | number | boolean | Date | null> = {};
+  let clientRelationIds: string[] | undefined;
 
   for (const [dutchName, internalName] of Object.entries(PROPERTY_MAP)) {
     const prop = props[dutchName];
     if (prop) {
-      values[internalName] = extractPropertyValue(prop);
+      const extracted = extractPropertyValue(prop);
+      values[internalName] = extracted.value;
+      // Track relation IDs for client field
+      if (internalName === 'client' && extracted.relationIds?.length) {
+        clientRelationIds = extracted.relationIds;
+      }
     }
   }
 
   const month = values.month as string | null;
 
   return {
-    id: page.id,
-    description: (values.description as string) || null,
-    kilometers: (values.kilometers as number) ?? null,
-    minutes: (values.minutes as number) ?? null,
-    hours: (values.hours as number) ?? null,
-    billable: (values.billable as boolean) ?? true,
-    startTime: (values.startTime as Date) || null,
-    endTime: (values.endTime as Date) || null,
-    breakMinutes: (values.breakMinutes as number) ?? null,
-    client: (values.client as string) || null,
-    type: (values.type as string) || null,
-    rate: (values.rate as number) ?? null,
-    revenue: (values.revenue as number) ?? null,
-    taxReservation: (values.taxReservation as number) ?? null,
-    netIncome: (values.netIncome as number) ?? null,
-    year: (values.year as number) ?? null,
-    quarter: (values.quarter as string) || null,
-    month,
-    monthNumber: extractMonthNumber(month),
-    week: (values.week as number) ?? null,
+    entry: {
+      id: page.id,
+      description: (values.description as string) || null,
+      kilometers: (values.kilometers as number) ?? null,
+      minutes: (values.minutes as number) ?? null,
+      hours: (values.hours as number) ?? null,
+      billable: (values.billable as boolean) ?? true,
+      startTime: (values.startTime as Date) || null,
+      endTime: (values.endTime as Date) || null,
+      breakMinutes: (values.breakMinutes as number) ?? null,
+      client: (values.client as string) || null,
+      type: (values.type as string) || null,
+      rate: (values.rate as number) ?? null,
+      revenue: (values.revenue as number) ?? null,
+      taxReservation: (values.taxReservation as number) ?? null,
+      netIncome: (values.netIncome as number) ?? null,
+      year: (values.year as number) ?? null,
+      quarter: (values.quarter as string) || null,
+      month,
+      monthNumber: extractMonthNumber(month),
+      week: (values.week as number) ?? null,
+    },
+    clientRelationIds,
   };
 }
 
@@ -187,9 +211,45 @@ export async function validateNotionConnection(databaseId: string): Promise<{
   }
 }
 
+async function resolvePageTitles(notion: Client, pageIds: string[]): Promise<Map<string, string>> {
+  const titleMap = new Map<string, string>();
+
+  // Fetch pages in parallel (batch of 10 to avoid rate limits)
+  const batchSize = 10;
+  for (let i = 0; i < pageIds.length; i += batchSize) {
+    const batch = pageIds.slice(i, i + batchSize);
+    const results = await Promise.all(
+      batch.map(async (pageId) => {
+        try {
+          const page = await notion.pages.retrieve({ page_id: pageId });
+          if (isFullPage(page)) {
+            // Get the title property (could be 'Name', 'Title', or the first title property)
+            for (const [, prop] of Object.entries(page.properties)) {
+              if (prop.type === 'title') {
+                const title = prop.title.map((t) => t.plain_text).join('');
+                return { id: pageId, title };
+              }
+            }
+          }
+          return { id: pageId, title: null };
+        } catch {
+          return { id: pageId, title: null };
+        }
+      })
+    );
+    for (const { id, title } of results) {
+      if (title) {
+        titleMap.set(id, title);
+      }
+    }
+  }
+
+  return titleMap;
+}
+
 export async function fetchAllTimeEntries(databaseId: string): Promise<TimeEntry[]> {
   const notion = getNotionClient();
-  const entries: TimeEntry[] = [];
+  const parsedEntries: ParsedEntry[] = [];
 
   let hasMore = true;
   let cursor: string | undefined;
@@ -209,7 +269,7 @@ export async function fetchAllTimeEntries(databaseId: string): Promise<TimeEntry
 
     for (const page of response.results) {
       if (isFullPage(page)) {
-        entries.push(parseTimeEntry(page));
+        parsedEntries.push(parseTimeEntry(page));
       }
     }
 
@@ -217,5 +277,34 @@ export async function fetchAllTimeEntries(databaseId: string): Promise<TimeEntry
     cursor = response.next_cursor ?? undefined;
   }
 
-  return entries;
+  // Collect all unique client page IDs that need resolution
+  const clientPageIds = new Set<string>();
+  for (const parsed of parsedEntries) {
+    if (parsed.clientRelationIds?.length) {
+      for (const id of parsed.clientRelationIds) {
+        clientPageIds.add(id);
+      }
+    }
+  }
+
+  // Resolve client names if there are any relation IDs
+  let clientNameMap = new Map<string, string>();
+  if (clientPageIds.size > 0) {
+    clientNameMap = await resolvePageTitles(notion, Array.from(clientPageIds));
+  }
+
+  // Build final entries with resolved client names
+  return parsedEntries.map((parsed) => {
+    const entry = parsed.entry;
+    if (parsed.clientRelationIds?.length && !entry.client) {
+      // Use the first relation's resolved name
+      const firstName = parsed.clientRelationIds
+        .map((id) => clientNameMap.get(id))
+        .find((name) => name);
+      if (firstName) {
+        entry.client = firstName;
+      }
+    }
+    return entry;
+  });
 }

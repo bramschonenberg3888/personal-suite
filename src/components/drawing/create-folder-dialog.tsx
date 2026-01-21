@@ -17,9 +17,14 @@ import { FolderPlus } from 'lucide-react';
 interface CreateFolderDialogProps {
   onCreateFolder: (_folderName: string) => void;
   isPending?: boolean;
+  trigger?: React.ReactNode;
 }
 
-export function CreateFolderDialog({ onCreateFolder, isPending }: CreateFolderDialogProps) {
+export function CreateFolderDialog({
+  onCreateFolder,
+  isPending,
+  trigger,
+}: CreateFolderDialogProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
 
@@ -34,10 +39,12 @@ export function CreateFolderDialog({ onCreateFolder, isPending }: CreateFolderDi
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">
-          <FolderPlus className="mr-2 h-4 w-4" />
-          New Folder
-        </Button>
+        {trigger ?? (
+          <Button variant="outline">
+            <FolderPlus className="mr-2 h-4 w-4" />
+            New Folder
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

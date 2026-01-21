@@ -7,41 +7,20 @@ Personal productivity and financial suite: stock portfolio watchlist (Yahoo Fina
 ```
 src/
 ├── app/                      # Next.js App Router
-│   ├── (dashboard)/          # Protected dashboard pages
-│   │   ├── portfolio/        # Stock portfolio tracker
-│   │   ├── drawings/         # Excalidraw drawings
-│   │   ├── shopper/          # Supermarket price tracker
-│   │   ├── weather/          # Weather forecasts
-│   │   └── revenue/          # Revenue tracking dashboard
-│   └── api/
-│       ├── auth/[...nextauth]/ # NextAuth routes
-│       └── trpc/[trpc]/      # tRPC endpoint
+│   ├── (dashboard)/          # Dashboard pages (portfolio, drawings, shopper, weather, revenue)
+│   └── api/                  # Auth (NextAuth) & tRPC endpoints
 ├── components/
-│   ├── ui/                   # Reusable UI (shadcn/ui)
+│   ├── ui/                   # shadcn/ui components
 │   ├── layout/               # App shell, sidebar
-│   ├── theme/                # Theme provider & toggle (next-themes)
-│   ├── portfolio/            # Stock cards, watchlist
-│   ├── drawing/              # Excalidraw wrapper, canvas
-│   ├── shopper/              # Product search, tracking
-│   ├── weather/              # Weather display components
-│   └── revenue/              # Revenue charts, tables, KPIs
+│   ├── theme/                # Theme provider (next-themes)
+│   └── [feature]/            # Feature-specific components
 ├── lib/
-│   ├── api/                  # External API clients
-│   │   ├── yahoo-finance.ts  # Stock quotes & news
-│   │   ├── albert-heijn.ts   # AH product search
-│   │   ├── jumbo.ts          # Jumbo product search
-│   │   ├── open-meteo.ts     # Weather data
-│   │   └── notion.ts         # Notion database integration
-│   ├── auth.ts               # NextAuth configuration
-│   └── db.ts                 # Prisma client singleton
-├── trpc/routers/             # tRPC API procedures
-│   ├── portfolio.ts          # Watchlist & quotes
-│   ├── drawing.ts            # Drawing CRUD & library
-│   ├── shopper.ts            # Product tracking
-│   ├── weather.ts            # Location & forecasts
-│   └── revenue.ts            # Revenue data from Notion
+│   ├── api/                  # External API clients (yahoo-finance, notion, open-meteo, etc.)
+│   ├── auth.ts               # NextAuth config
+│   └── db.ts                 # Prisma client
+├── trpc/routers/             # tRPC procedures (one router per feature)
 ├── hooks/                    # Custom React hooks
-└── generated/prisma/         # Prisma generated client
+└── generated/prisma/         # Prisma client (auto-generated)
 
 prisma/schema.prisma          # Database schema
 __tests__/                    # Unit tests (Vitest)
@@ -50,31 +29,17 @@ tests/                        # E2E tests (Playwright)
 
 ## Organization Rules
 
-**Keep code organized and modularized:**
-
-- API procedures → `src/trpc/routers/`, one router per domain
-- Components → `src/components/`, one component per file
-- Utilities → `src/lib/`, grouped by functionality
-- Types → `src/types/` or co-located with usage
-- Unit tests → `__tests__/`, mirroring src/ structure
-- E2E tests → `tests/`, one spec per feature
-
-**Modularity principles:**
-
-- Single responsibility per file
-- Clear, descriptive file names
-- Group related functionality together
-- Avoid monolithic files
+- tRPC routers → `src/trpc/routers/`, one per feature
+- Components → `src/components/[feature]/`, one per file
+- API clients → `src/lib/api/`, one per external service
+- Tests → `__tests__/` (unit) or `tests/` (E2E)
 
 ## Parallel Development
 
-Features are isolated for parallel Claude Code sessions. Each feature has its own page, components, API client, and tRPC router.
+Features are isolated. Safe for parallel work: portfolio, drawing, shopper, weather, revenue.
+Coordinate changes to: `src/trpc/routers/_app.ts`, `prisma/schema.prisma`, `src/components/layout/`
 
-**Safe for parallel work:** All feature-specific files (portfolio, drawing, shopper, weather, revenue)
-
-**Coordinate changes to:** `src/trpc/routers/_app.ts`, `prisma/schema.prisma`, `src/components/layout/`
-
-## Code Quality - Zero Tolerance
+## Code Quality
 
 After editing ANY file, run:
 
@@ -82,36 +47,41 @@ After editing ANY file, run:
 bun run lint && bun run type-check && bun run format:check
 ```
 
-To auto-fix formatting: `bun run format`
+Fix ALL errors/warnings before continuing. Auto-fix formatting: `bun run format`
 
-Fix ALL errors/warnings before continuing.
-
-## Testing
-
-After code changes, run tests:
+## Commands
 
 ```bash
+bun dev                   # Dev server
 bun run test:run          # Unit tests
-bun run test:e2e          # E2E tests (requires dev server)
-```
-
-## Database
-
-After schema changes:
-
-```bash
+bun run test:e2e          # E2E tests
 bun db:generate           # Regenerate Prisma client
-bun db:push               # Push to database
+bun db:push               # Push schema to database
 ```
 
-## Dev Server
+## Design System (Ocean + Plus Jakarta Sans)
 
-```bash
-bun dev                   # Start development server
-```
+**Use shadcn/ui components.** Install: `npx shadcn@latest add [component-name]`
 
-If changes require server restart (env vars, next.config.ts):
+**Semantic Tailwind classes only:**
 
-1. Restart server
-2. Check terminal for errors
-3. Fix ALL warnings before continuing
+| Use                     | Not               |
+| ----------------------- | ----------------- |
+| `bg-primary`            | `bg-blue-500`     |
+| `bg-secondary/muted`    | `bg-gray-100`     |
+| `bg-card/background`    | `bg-white`        |
+| `text-foreground`       | `text-gray-900`   |
+| `text-muted-foreground` | `text-gray-500`   |
+| `border-border/input`   | `border-gray-200` |
+
+**Never hardcode colors** (no hex, no Tailwind palette colors, no OKLCH).
+
+**Color meanings:**
+
+- `primary` - Main actions, links (Ocean blue)
+- `muted` - Disabled states, subtle backgrounds
+- `destructive` - Delete, error actions
+
+**Dark mode:** Automatic via CSS variables. Toggle with `document.documentElement.classList.toggle('dark')`.
+
+**Spacing:** Page `p-6`/`p-8`, sections `gap-8`, components `gap-4`, inline `gap-2`.

@@ -20,7 +20,6 @@ import { NotionSettingsDialog } from './notion-settings-dialog';
 import { KpiCards } from './kpi-cards';
 import { InteractiveMetricsChart } from './interactive-metrics-chart';
 import { ClientBreakdown } from './client-breakdown';
-import { TypeBreakdown } from './type-breakdown';
 
 interface DateRange {
   from?: Date;
@@ -30,9 +29,7 @@ interface DateRange {
 export function RevenueDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>({});
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [clientsOpen, setClientsOpen] = useState(false);
-  const [typesOpen, setTypesOpen] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: connection, isLoading: connectionLoading } = trpc.revenue.connection.get.useQuery();
@@ -46,7 +43,6 @@ export function RevenueDashboard() {
       startDate: dateRange.from,
       endDate: dateRange.to,
       clients: selectedClients.length > 0 ? selectedClients : undefined,
-      types: selectedTypes.length > 0 ? selectedTypes : undefined,
     },
     { enabled: !!connection }
   );
@@ -65,21 +61,13 @@ export function RevenueDashboard() {
   const clearFilters = () => {
     setDateRange({});
     setSelectedClients([]);
-    setSelectedTypes([]);
   };
 
-  const hasFilters =
-    dateRange.from || dateRange.to || selectedClients.length > 0 || selectedTypes.length > 0;
+  const hasFilters = dateRange.from || dateRange.to || selectedClients.length > 0;
 
   const toggleClient = (client: string) => {
     setSelectedClients((prev) =>
       prev.includes(client) ? prev.filter((c) => c !== client) : [...prev, client]
-    );
-  };
-
-  const toggleType = (type: string) => {
-    setSelectedTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
   };
 
@@ -225,45 +213,6 @@ export function RevenueDashboard() {
                 </Popover>
               </div>
             )}
-
-            {filterOptions && filterOptions.types.length > 0 && (
-              <div>
-                <label className="mb-1 block text-sm font-medium">Types</label>
-                <Popover open={typesOpen} onOpenChange={setTypesOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-48 justify-start">
-                      {selectedTypes.length > 0 ? (
-                        <span className="truncate">{selectedTypes.length} selected</span>
-                      ) : (
-                        <span className="text-muted-foreground">All types</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-48 p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search types..." />
-                      <CommandList>
-                        <CommandEmpty>No types found.</CommandEmpty>
-                        <CommandGroup>
-                          {filterOptions.types.map((type) => (
-                            <CommandItem key={type} onSelect={() => toggleType(type)}>
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className={`flex h-4 w-4 items-center justify-center rounded border ${selectedTypes.includes(type) ? 'border-primary bg-primary text-primary-foreground' : 'border-muted'}`}
-                                >
-                                  {selectedTypes.includes(type) && <Check className="h-3 w-3" />}
-                                </div>
-                                <span className="truncate">{type}</span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
           </div>
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
@@ -275,18 +224,12 @@ export function RevenueDashboard() {
       </Card>
 
       {/* Selected filters */}
-      {(selectedClients.length > 0 || selectedTypes.length > 0) && (
+      {selectedClients.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {selectedClients.map((client) => (
             <Badge key={client} variant="secondary" className="gap-1">
               {client}
               <X className="h-3 w-3 cursor-pointer" onClick={() => toggleClient(client)} />
-            </Badge>
-          ))}
-          {selectedTypes.map((type) => (
-            <Badge key={type} variant="outline" className="gap-1">
-              {type}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => toggleType(type)} />
             </Badge>
           ))}
         </div>
@@ -300,22 +243,14 @@ export function RevenueDashboard() {
         startDate={dateRange.from}
         endDate={dateRange.to}
         clients={selectedClients.length > 0 ? selectedClients : undefined}
-        types={selectedTypes.length > 0 ? selectedTypes : undefined}
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ClientBreakdown
-          startDate={dateRange.from}
-          endDate={dateRange.to}
-          clients={selectedClients.length > 0 ? selectedClients : undefined}
-          types={selectedTypes.length > 0 ? selectedTypes : undefined}
-        />
-        <TypeBreakdown
-          startDate={dateRange.from}
-          endDate={dateRange.to}
-          clients={selectedClients.length > 0 ? selectedClients : undefined}
-        />
-      </div>
+      {/* Client Breakdown */}
+      <ClientBreakdown
+        startDate={dateRange.from}
+        endDate={dateRange.to}
+        clients={selectedClients.length > 0 ? selectedClients : undefined}
+      />
     </div>
   );
 }

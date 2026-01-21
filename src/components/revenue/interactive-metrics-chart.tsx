@@ -38,12 +38,11 @@ interface InteractiveMetricsChartProps {
   startDate?: Date;
   endDate?: Date;
   clients?: string[];
-  types?: string[];
 }
 
 type ChartType = 'area' | 'line' | 'bar';
 type Metric = 'revenue' | 'netIncome' | 'hours';
-type GroupBy = 'month' | 'quarter' | 'year';
+type GroupBy = 'week' | 'month' | 'quarter' | 'year';
 type CompareMode = 'none' | 'yoy' | 'multi';
 type MovingAverage = 0 | 3 | 6;
 
@@ -79,7 +78,6 @@ export function InteractiveMetricsChart({
   startDate,
   endDate,
   clients,
-  types,
 }: InteractiveMetricsChartProps) {
   // Chart configuration state
   const [chartType, setChartType] = useState<ChartType>('area');
@@ -103,20 +101,122 @@ export function InteractiveMetricsChart({
     startDate,
     endDate,
     clients,
-    types,
     billable: billableOnly ? true : undefined,
   });
+
+  // Generate all periods for the date range
+  const generatePeriods = useMemo(() => {
+    if (!startDate || !endDate) return null;
+
+    const periods: string[] = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (groupBy === 'week') {
+      // Generate weeks
+      const current = new Date(start);
+      // Move to start of week (Monday)
+      const day = current.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      current.setDate(current.getDate() + diff);
+
+      while (current <= end) {
+        const year = current.getFullYear();
+        // ISO week number calculation
+        const jan4 = new Date(year, 0, 4);
+        const dayOfYear =
+          Math.floor((current.getTime() - new Date(year, 0, 1).getTime()) / 86400000) + 1;
+        const weekNum = Math.ceil((dayOfYear + jan4.getDay() - 1) / 7);
+        periods.push(`${year}-W${String(weekNum).padStart(2, '0')}`);
+        current.setDate(current.getDate() + 7);
+      }
+    } else if (groupBy === 'month') {
+      // Generate months
+      const current = new Date(start.getFullYear(), start.getMonth(), 1);
+      const monthNames = [
+        'januari',
+        'februari',
+        'maart',
+        'april',
+        'mei',
+        'juni',
+        'juli',
+        'augustus',
+        'september',
+        'oktober',
+        'november',
+        'december',
+      ];
+      while (current <= end) {
+        periods.push(`${current.getFullYear()}-${monthNames[current.getMonth()]}`);
+        current.setMonth(current.getMonth() + 1);
+      }
+    } else if (groupBy === 'quarter') {
+      // Generate quarters
+      const startQuarter = Math.floor(start.getMonth() / 3) + 1;
+      const startYear = start.getFullYear();
+      const endQuarter = Math.floor(end.getMonth() / 3) + 1;
+      const endYear = end.getFullYear();
+
+      let year = startYear;
+      let quarter = startQuarter;
+      while (year < endYear || (year === endYear && quarter <= endQuarter)) {
+        periods.push(`${year} Q${quarter}`);
+        quarter++;
+        if (quarter > 4) {
+          quarter = 1;
+          year++;
+        }
+      }
+    } else if (groupBy === 'year') {
+      // Generate years
+      for (let year = start.getFullYear(); year <= end.getFullYear(); year++) {
+        periods.push(year.toString());
+      }
+    }
+
+    return periods;
+  }, [startDate, endDate, groupBy]);
 
   // Transform data based on settings
   const chartData = useMemo(() => {
     if (!data) return [];
 
-    let transformed = data.map((item) => ({
-      period: item.period,
-      revenue: item.revenue,
-      netIncome: item.netIncome,
-      hours: item.hours,
-    }));
+    // Create a map of existing data
+    const dataMap = new Map(
+      data.map((item) => [
+        item.period,
+        { revenue: item.revenue, netIncome: item.netIncome, hours: item.hours },
+      ])
+    );
+
+    // If we have generated periods, use them; otherwise use data as-is
+    let transformed: {
+      period: string;
+      revenue: number;
+      netIncome: number;
+      hours: number;
+      movingAvg?: number | null;
+    }[];
+
+    if (generatePeriods && generatePeriods.length > 0) {
+      transformed = generatePeriods.map((period) => {
+        const existing = dataMap.get(period);
+        return {
+          period,
+          revenue: existing?.revenue ?? 0,
+          netIncome: existing?.netIncome ?? 0,
+          hours: existing?.hours ?? 0,
+        };
+      });
+    } else {
+      transformed = data.map((item) => ({
+        period: item.period,
+        revenue: item.revenue,
+        netIncome: item.netIncome,
+        hours: item.hours,
+      }));
+    }
 
     // Apply cumulative if enabled
     if (cumulative) {
@@ -145,7 +245,7 @@ export function InteractiveMetricsChart({
     }
 
     return transformed;
-  }, [data, cumulative, movingAverage, metric]);
+  }, [data, generatePeriods, cumulative, movingAverage, metric]);
 
   // Calculate target progress
   const targetProgress = useMemo(() => {
@@ -411,6 +511,7 @@ export function InteractiveMetricsChart({
           <CardTitle>Interactive Metrics Chart</CardTitle>
           <Tabs value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)}>
             <TabsList>
+              <TabsTrigger value="week">Week</TabsTrigger>
               <TabsTrigger value="month">Month</TabsTrigger>
               <TabsTrigger value="quarter">Quarter</TabsTrigger>
               <TabsTrigger value="year">Year</TabsTrigger>
