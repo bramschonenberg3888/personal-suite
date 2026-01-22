@@ -7,7 +7,7 @@ Personal productivity and financial suite: stock portfolio watchlist (Yahoo Fina
 ```
 src/
 ├── app/                      # Next.js App Router
-│   ├── (dashboard)/          # Dashboard pages (portfolio, drawings, shopper, weather, revenue)
+│   ├── (dashboard)/          # Dashboard pages (portfolio, drawings, shopper, weather, finance)
 │   └── api/                  # Auth (NextAuth) & tRPC endpoints
 ├── components/
 │   ├── ui/                   # shadcn/ui components
@@ -15,11 +15,13 @@ src/
 │   ├── theme/                # Theme provider (next-themes)
 │   └── [feature]/            # Feature-specific components
 ├── lib/
-│   ├── api/                  # External API clients (yahoo-finance, notion, open-meteo, etc.)
+│   ├── api/                  # External API clients (yahoo-finance, notion, notion-costs, open-meteo, etc.)
 │   ├── auth.ts               # NextAuth config
 │   └── db.ts                 # Prisma client
 ├── trpc/routers/             # tRPC procedures (one router per feature)
 ├── hooks/                    # Custom React hooks
+├── types/                    # Custom TypeScript type definitions
+├── env.ts                    # Environment variable validation (t3-env)
 └── generated/prisma/         # Prisma client (auto-generated)
 
 prisma/schema.prisma          # Database schema
@@ -36,7 +38,7 @@ tests/                        # E2E tests (Playwright)
 
 ## Parallel Development
 
-Features are isolated. Safe for parallel work: portfolio, drawing, shopper, weather, revenue.
+Features are isolated. Safe for parallel work: portfolio, drawing, shopper, weather, finance (revenue, invoices, costs).
 Coordinate changes to: `src/trpc/routers/_app.ts`, `prisma/schema.prisma`, `src/components/layout/`
 
 ## Code Quality
@@ -74,7 +76,7 @@ bun db:push               # Push schema to database
 | `text-muted-foreground` | `text-gray-500`   |
 | `border-border/input`   | `border-gray-200` |
 
-**Never hardcode colors** (no hex, no Tailwind palette colors, no OKLCH).
+**Never hardcode colors** (no hex, no Tailwind palette colors, no OKLCH). Exception: Recharts requires hex colors for charts.
 
 **Color meanings:**
 
