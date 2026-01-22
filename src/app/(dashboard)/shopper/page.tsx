@@ -16,7 +16,9 @@ import {
 import { ProductSearch } from '@/components/shopper/product-search';
 import { TrackedProductCard } from '@/components/shopper/tracked-product-card';
 import { SupermarketFilter } from '@/components/shopper/supermarket-filter';
-import { RefreshCw, Bell, ShoppingCart, ArrowUpDown, Filter } from 'lucide-react';
+import { ComparisonGroupCard } from '@/components/shopper/comparison-group-card';
+import { AddToComparisonDialog } from '@/components/shopper/add-to-comparison-dialog';
+import { RefreshCw, Bell, ShoppingCart, ArrowUpDown, Filter, GitCompare } from 'lucide-react';
 
 type SortOption = 'date' | 'name' | 'price-asc' | 'price-desc' | 'supermarket';
 type FilterOption = 'all' | 'Albert Heijn' | 'Jumbo';
@@ -25,6 +27,10 @@ export default function ShopperPage() {
   const utils = trpc.useUtils();
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
+  const [comparisonDialogOpen, setComparisonDialogOpen] = useState(false);
+  const [selectedProductForComparison, setSelectedProductForComparison] = useState<string | null>(
+    null
+  );
 
   // Seed supermarkets on first load
   const seedMutation = trpc.shopper.supermarket.seed.useMutation();
@@ -36,6 +42,9 @@ export default function ShopperPage() {
 
   const { data: trackedProducts, isLoading: trackedLoading } =
     trpc.shopper.tracked.getAll.useQuery();
+
+  const { data: comparisonGroups, isLoading: comparisonLoading } =
+    trpc.shopper.comparison.getAll.useQuery();
 
   // Get unique supermarkets from tracked products for filter options
   const availableSupermarkets = useMemo(() => {
@@ -102,6 +111,44 @@ export default function ShopperPage() {
     },
   });
 
+  const createComparison = trpc.shopper.comparison.create.useMutation({
+    onSuccess: () => {
+      utils.shopper.comparison.getAll.invalidate();
+      utils.shopper.tracked.getAll.invalidate();
+      setComparisonDialogOpen(false);
+      setSelectedProductForComparison(null);
+    },
+  });
+
+  const addToComparison = trpc.shopper.comparison.addProduct.useMutation({
+    onSuccess: () => {
+      utils.shopper.comparison.getAll.invalidate();
+      utils.shopper.tracked.getAll.invalidate();
+      setComparisonDialogOpen(false);
+      setSelectedProductForComparison(null);
+    },
+  });
+
+  const removeFromComparison = trpc.shopper.comparison.removeProduct.useMutation({
+    onSuccess: () => {
+      utils.shopper.comparison.getAll.invalidate();
+      utils.shopper.tracked.getAll.invalidate();
+    },
+  });
+
+  const updateComparisonName = trpc.shopper.comparison.updateName.useMutation({
+    onSuccess: () => {
+      utils.shopper.comparison.getAll.invalidate();
+    },
+  });
+
+  const deleteComparison = trpc.shopper.comparison.delete.useMutation({
+    onSuccess: () => {
+      utils.shopper.comparison.getAll.invalidate();
+      utils.shopper.tracked.getAll.invalidate();
+    },
+  });
+
   const handleTrack = (product: {
     externalId: string;
     name: string;
@@ -121,6 +168,31 @@ export default function ShopperPage() {
       unit: product.unit,
     });
   };
+
+  const handleOpenComparisonDialog = (trackedProductId: string) => {
+    setSelectedProductForComparison(trackedProductId);
+    setComparisonDialogOpen(true);
+  };
+
+  const handleCreateComparison = (name?: string) => {
+    if (selectedProductForComparison) {
+      createComparison.mutate({
+        trackedProductId: selectedProductForComparison,
+        name,
+      });
+    }
+  };
+
+  const handleAddToExistingComparison = (groupId: string) => {
+    if (selectedProductForComparison) {
+      addToComparison.mutate({
+        groupId,
+        trackedProductId: selectedProductForComparison,
+      });
+    }
+  };
+
+  const selectedProduct = trackedProducts?.find((t) => t.id === selectedProductForComparison);
 
   return (
     <div className="space-y-6">
@@ -177,6 +249,10 @@ export default function ShopperPage() {
           <TabsTrigger value="tracked">
             <ShoppingCart className="mr-2 h-4 w-4" />
             Tracked ({trackedProducts?.length ?? 0})
+          </TabsTrigger>
+          <TabsTrigger value="compare">
+            <GitCompare className="mr-2 h-4 w-4" />
+            Compare ({comparisonGroups?.length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="search">Search Products</TabsTrigger>
         </TabsList>
@@ -246,6 +322,7 @@ export default function ShopperPage() {
                     onSetTargetPrice={(id, price) =>
                       setTargetPrice.mutate({ id, targetPrice: price })
                     }
+                    onAddToComparison={handleOpenComparisonDialog}
                     isRemoving={untrackProduct.isPending}
                   />
                 ))}
@@ -266,11 +343,62 @@ export default function ShopperPage() {
           )}
         </TabsContent>
 
+        <TabsContent value="compare" className="space-y-4 mt-4">
+          {comparisonLoading ? (
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <Skeleton key={i} className="h-48" />
+              ))}
+            </div>
+          ) : comparisonGroups && comparisonGroups.length > 0 ? (
+            <div className="space-y-4">
+              {comparisonGroups.map((group) => (
+                <ComparisonGroupCard
+                  key={group.id}
+                  group={group}
+                  onUpdateName={(groupId, name) => updateComparisonName.mutate({ groupId, name })}
+                  onRemoveProduct={(trackedProductId) =>
+                    removeFromComparison.mutate({ trackedProductId })
+                  }
+                  onDeleteGroup={(groupId) => deleteComparison.mutate({ groupId })}
+                  isUpdating={
+                    updateComparisonName.isPending ||
+                    removeFromComparison.isPending ||
+                    deleteComparison.isPending
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <GitCompare className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground mb-4">No price comparisons yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  Track products from both stores, then click the compare button to see prices side
+                  by side.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
         <TabsContent value="search" className="space-y-4 mt-4">
           <SupermarketFilter />
           <ProductSearch onTrack={handleTrack} isTracking={trackProduct.isPending} />
         </TabsContent>
       </Tabs>
+
+      {/* Comparison Dialog */}
+      <AddToComparisonDialog
+        open={comparisonDialogOpen}
+        onOpenChange={setComparisonDialogOpen}
+        productName={selectedProduct?.product.name || ''}
+        existingGroups={comparisonGroups || []}
+        onCreateNew={handleCreateComparison}
+        onAddToExisting={handleAddToExistingComparison}
+        isLoading={createComparison.isPending || addToComparison.isPending}
+      />
     </div>
   );
 }

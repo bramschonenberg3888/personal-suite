@@ -47,16 +47,17 @@ model User {
   accounts      Account[]
   sessions      Session[]
   // Personal Suite relations
-  portfolioItems   PortfolioItem[]
-  drawings         Drawing[]
-  drawingFolders   DrawingFolder[]
-  libraries        ExcalidrawLibrary[]
-  trackedProducts  TrackedProduct[]
-  supermarkets     UserSupermarket[]
-  location         UserLocation?
-  notionConnection NotionConnection?
-  revenueEntries   RevenueEntry[]
-  costEntries      CostEntry[]
+  portfolioItems    PortfolioItem[]
+  drawings          Drawing[]
+  drawingFolders    DrawingFolder[]
+  libraries         ExcalidrawLibrary[]
+  trackedProducts   TrackedProduct[]
+  supermarkets      UserSupermarket[]
+  comparisonGroups  ComparisonGroup[]
+  location          UserLocation?
+  notionConnection  NotionConnection?
+  revenueEntries    RevenueEntry[]
+  costEntries       CostEntry[]
 }
 
 model VerificationToken {
@@ -178,16 +179,31 @@ model PriceHistory {
 }
 
 model TrackedProduct {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  targetPrice Float?
-  alertOnSale Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id                String           @id @default(cuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  targetPrice       Float?
+  alertOnSale       Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  comparisonGroupId String?
+  comparisonGroup   ComparisonGroup? @relation(fields: [comparisonGroupId], references: [id], onDelete: SetNull)
 
   @@unique([userId, productId])
+  @@index([comparisonGroupId])
+}
+
+model ComparisonGroup {
+  id        String           @id @default(cuid())
+  name      String?
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products  TrackedProduct[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([userId])
 }
 
 model UserSupermarket {
@@ -249,6 +265,10 @@ model RevenueEntry {
   month          String?
   monthNumber    Int?
   week           Int?
+  invoiceNumber  String?
+  invoiceDate    DateTime?
+  invoiceStatus  String?
+  clientType     String?
   syncedAt       DateTime  @default(now())
 
   @@index([userId])

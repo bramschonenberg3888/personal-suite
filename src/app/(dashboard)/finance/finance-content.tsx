@@ -3,7 +3,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RevenueDashboard } from '@/components/revenue/revenue-dashboard';
 import { CostsDashboard } from '@/components/costs/costs-dashboard';
-import { DollarSign, Receipt } from 'lucide-react';
+import { InvoicesDashboard } from '@/components/invoices/invoices-dashboard';
+import { DollarSign, Receipt, FileText } from 'lucide-react';
 
 export function FinanceContent() {
   return (
@@ -21,6 +22,10 @@ export function FinanceContent() {
             <DollarSign className="h-4 w-4" />
             Revenue
           </TabsTrigger>
+          <TabsTrigger value="invoices" className="gap-2">
+            <FileText className="h-4 w-4" />
+            Invoices
+          </TabsTrigger>
           <TabsTrigger value="costs" className="gap-2">
             <Receipt className="h-4 w-4" />
             Costs
@@ -29,6 +34,10 @@ export function FinanceContent() {
 
         <TabsContent value="revenue">
           <RevenueDashboard />
+        </TabsContent>
+
+        <TabsContent value="invoices">
+          <InvoicesDashboard />
         </TabsContent>
 
         <TabsContent value="costs">

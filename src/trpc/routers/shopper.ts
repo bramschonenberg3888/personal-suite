@@ -271,6 +271,7 @@ export const shopperRouter = createTRPCRouter({
               },
             },
           },
+          comparisonGroup: true,
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -405,6 +406,190 @@ export const shopperRouter = createTRPCRouter({
         return false;
       });
     }),
+  }),
+
+  // Comparison groups for price comparison across stores
+  comparison: createTRPCRouter({
+    // Get all comparison groups with their products
+    getAll: protectedProcedure.query(async ({ ctx }) => {
+      return ctx.db.comparisonGroup.findMany({
+        where: { userId: ctx.userId },
+        include: {
+          products: {
+            include: {
+              product: {
+                include: {
+                  supermarket: true,
+                  priceHistory: {
+                    orderBy: { recordedAt: 'desc' },
+                    take: 30,
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }),
+
+    // Create a new comparison group with an initial product
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().optional(),
+          trackedProductId: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // Verify the tracked product belongs to the user
+        const trackedProduct = await ctx.db.trackedProduct.findFirst({
+          where: {
+            id: input.trackedProductId,
+            userId: ctx.userId,
+          },
+        });
+
+        if (!trackedProduct) {
+          throw new Error('Tracked product not found');
+        }
+
+        // Create the comparison group and link the product
+        return ctx.db.comparisonGroup.create({
+          data: {
+            name: input.name,
+            userId: ctx.userId,
+            products: {
+              connect: { id: input.trackedProductId },
+            },
+          },
+          include: {
+            products: {
+              include: {
+                product: {
+                  include: {
+                    supermarket: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+      }),
+
+    // Add a product to an existing comparison group
+    addProduct: protectedProcedure
+      .input(
+        z.object({
+          groupId: z.string(),
+          trackedProductId: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // Verify the group belongs to the user
+        const group = await ctx.db.comparisonGroup.findFirst({
+          where: {
+            id: input.groupId,
+            userId: ctx.userId,
+          },
+        });
+
+        if (!group) {
+          throw new Error('Comparison group not found');
+        }
+
+        // Verify the tracked product belongs to the user
+        const trackedProduct = await ctx.db.trackedProduct.findFirst({
+          where: {
+            id: input.trackedProductId,
+            userId: ctx.userId,
+          },
+        });
+
+        if (!trackedProduct) {
+          throw new Error('Tracked product not found');
+        }
+
+        // Link the product to the group
+        return ctx.db.trackedProduct.update({
+          where: { id: input.trackedProductId },
+          data: { comparisonGroupId: input.groupId },
+          include: {
+            product: {
+              include: {
+                supermarket: true,
+              },
+            },
+          },
+        });
+      }),
+
+    // Remove a product from a comparison group
+    removeProduct: protectedProcedure
+      .input(
+        z.object({
+          trackedProductId: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // Verify the tracked product belongs to the user
+        const trackedProduct = await ctx.db.trackedProduct.findFirst({
+          where: {
+            id: input.trackedProductId,
+            userId: ctx.userId,
+          },
+        });
+
+        if (!trackedProduct) {
+          throw new Error('Tracked product not found');
+        }
+
+        // Remove from group
+        return ctx.db.trackedProduct.update({
+          where: { id: input.trackedProductId },
+          data: { comparisonGroupId: null },
+        });
+      }),
+
+    // Update comparison group name
+    updateName: protectedProcedure
+      .input(
+        z.object({
+          groupId: z.string(),
+          name: z.string().nullable(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return ctx.db.comparisonGroup.update({
+          where: {
+            id: input.groupId,
+            userId: ctx.userId,
+          },
+          data: { name: input.name },
+        });
+      }),
+
+    // Delete a comparison group (products are unlinked, not deleted)
+    delete: protectedProcedure
+      .input(z.object({ groupId: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        // First unlink all products
+        await ctx.db.trackedProduct.updateMany({
+          where: {
+            comparisonGroupId: input.groupId,
+            userId: ctx.userId,
+          },
+          data: { comparisonGroupId: null },
+        });
+
+        // Then delete the group
+        return ctx.db.comparisonGroup.delete({
+          where: {
+            id: input.groupId,
+            userId: ctx.userId,
+          },
+        });
+      }),
   }),
 
   // Price refresh (would be called by a cron job in production)

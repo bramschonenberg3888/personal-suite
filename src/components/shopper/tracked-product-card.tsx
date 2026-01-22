@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Bell, BellOff, TrendingDown, TrendingUp } from 'lucide-react';
+import { Trash2, Bell, BellOff, TrendingDown, TrendingUp, GitCompare } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface TrackedProductCardProps {
@@ -14,6 +14,11 @@ interface TrackedProductCardProps {
     id: string;
     targetPrice: number | null;
     alertOnSale: boolean;
+    comparisonGroupId?: string | null;
+    comparisonGroup?: {
+      id: string;
+      name: string | null;
+    } | null;
     product: {
       id: string;
       name: string;
@@ -29,10 +34,9 @@ interface TrackedProductCardProps {
       }>;
     };
   };
-  // eslint-disable-next-line no-unused-vars
-  onUntrack: (id: string) => void;
-  // eslint-disable-next-line no-unused-vars
-  onSetTargetPrice: (id: string, price: number | null) => void;
+  onUntrack: (_id: string) => void;
+  onSetTargetPrice: (_id: string, _price: number | null) => void;
+  onAddToComparison?: (_trackedProductId: string) => void;
   isRemoving?: boolean;
 }
 
@@ -40,6 +44,7 @@ export function TrackedProductCard({
   trackedProduct,
   onUntrack,
   onSetTargetPrice,
+  onAddToComparison,
   isRemoving,
 }: TrackedProductCardProps) {
   const [targetPriceInput, setTargetPriceInput] = useState(
@@ -86,12 +91,18 @@ export function TrackedProductCard({
             )}
             <div>
               <CardTitle className="text-base line-clamp-1">{product.name}</CardTitle>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <Badge variant="outline" className="text-xs">
                   {product.supermarket.name}
                 </Badge>
                 {product.unit && (
                   <span className="text-xs text-muted-foreground">{product.unit}</span>
+                )}
+                {trackedProduct.comparisonGroup && (
+                  <Badge variant="secondary" className="text-xs">
+                    <GitCompare className="h-3 w-3 mr-1" />
+                    Comparing
+                  </Badge>
                 )}
               </div>
             </div>
@@ -134,56 +145,69 @@ export function TrackedProductCard({
             )}
           </div>
 
-          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                {trackedProduct.targetPrice ? (
-                  <>
-                    <Bell className="h-4 w-4 mr-2" />
-                    {formatPrice(trackedProduct.targetPrice)}
-                  </>
-                ) : (
-                  <>
-                    <BellOff className="h-4 w-4 mr-2" />
-                    Set alert
-                  </>
-                )}
+          <div className="flex items-center gap-2">
+            {onAddToComparison && !trackedProduct.comparisonGroup && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onAddToComparison(trackedProduct.id)}
+                title="Compare prices"
+              >
+                <GitCompare className="h-4 w-4" />
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Target Price</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 2.50"
-                  value={targetPriceInput}
-                  onChange={(e) => setTargetPriceInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSetTargetPrice();
-                  }}
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" className="flex-1" onClick={handleSetTargetPrice}>
-                    Save
-                  </Button>
-                  {trackedProduct.targetPrice && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setTargetPriceInput('');
-                        onSetTargetPrice(trackedProduct.id, null);
-                        setPopoverOpen(false);
-                      }}
-                    >
-                      Clear
-                    </Button>
+            )}
+
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  {trackedProduct.targetPrice ? (
+                    <>
+                      <Bell className="h-4 w-4 mr-2" />
+                      {formatPrice(trackedProduct.targetPrice)}
+                    </>
+                  ) : (
+                    <>
+                      <BellOff className="h-4 w-4 mr-2" />
+                      Set alert
+                    </>
                   )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Target Price</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g., 2.50"
+                    value={targetPriceInput}
+                    onChange={(e) => setTargetPriceInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSetTargetPrice();
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1" onClick={handleSetTargetPrice}>
+                      Save
+                    </Button>
+                    {trackedProduct.targetPrice && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setTargetPriceInput('');
+                          onSetTargetPrice(trackedProduct.id, null);
+                          setPopoverOpen(false);
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
 
         {priceHistory.length > 1 && (

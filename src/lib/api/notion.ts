@@ -16,12 +16,16 @@ const PROPERTY_MAP = {
   Soort: 'type',
   Tarief: 'rate',
   Omzet: 'revenue',
-  'IB reservering': 'taxReservation',
+  'IB reservering ': 'taxReservation',
   'Netto inkomen': 'netIncome',
   Jaar: 'year',
   Kwartaal: 'quarter',
   Maand: 'month',
   Week: 'week',
+  'Factuur-nr': 'invoiceNumber',
+  Factuurdatum: 'invoiceDate',
+  'Facturatie-status': 'invoiceStatus',
+  'Type klant': 'clientType',
 } as const;
 
 export interface TimeEntry {
@@ -45,6 +49,10 @@ export interface TimeEntry {
   month: string | null;
   monthNumber: number | null;
   week: number | null;
+  invoiceNumber: string | null;
+  invoiceDate: Date | null;
+  invoiceStatus: string | null;
+  clientType: string | null;
 }
 
 function getNotionClient(): Client {
@@ -73,6 +81,8 @@ function extractPropertyValue(property: PageObjectResponse['properties'][string]
       return { value: property.date?.start ? new Date(property.date.start) : null };
     case 'select':
       return { value: property.select?.name || null };
+    case 'status':
+      return { value: property.status?.name || null };
     case 'relation': {
       // Return the first relation's page ID; we'll resolve names later
       const relationIds = property.relation.map((r) => r.id);
@@ -170,6 +180,10 @@ function parseTimeEntry(page: PageObjectResponse): ParsedEntry {
       month,
       monthNumber: extractMonthNumber(month),
       week: (values.week as number) ?? null,
+      invoiceNumber: (values.invoiceNumber as string) || null,
+      invoiceDate: (values.invoiceDate as Date) || null,
+      invoiceStatus: (values.invoiceStatus as string) || null,
+      clientType: (values.clientType as string) || null,
     },
     clientRelationIds,
   };

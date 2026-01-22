@@ -72,6 +72,10 @@ export const revenueRouter = createTRPCRouter({
           month: entry.month,
           monthNumber: entry.monthNumber,
           week: entry.week,
+          invoiceNumber: entry.invoiceNumber,
+          invoiceDate: entry.invoiceDate,
+          invoiceStatus: entry.invoiceStatus,
+          clientType: entry.clientType,
         },
         update: {
           description: entry.description,
@@ -93,6 +97,10 @@ export const revenueRouter = createTRPCRouter({
           month: entry.month,
           monthNumber: entry.monthNumber,
           week: entry.week,
+          invoiceNumber: entry.invoiceNumber,
+          invoiceDate: entry.invoiceDate,
+          invoiceStatus: entry.invoiceStatus,
+          clientType: entry.clientType,
           syncedAt: new Date(),
         },
       });
@@ -382,6 +390,100 @@ export const revenueRouter = createTRPCRouter({
       const types = [...new Set(entries.map((e) => e.type).filter(Boolean))] as string[];
 
       return { clients: clients.sort(), types: types.sort() };
+    }),
+
+    byInvoice: protectedProcedure
+      .input(
+        z
+          .object({
+            startDate: z.date().optional(),
+            endDate: z.date().optional(),
+            statuses: z.array(z.string()).optional(),
+            clientTypes: z.array(z.string()).optional(),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const where: Prisma.RevenueEntryWhereInput = {
+          userId: ctx.userId,
+          invoiceNumber: { not: null },
+        };
+
+        if (input?.startDate || input?.endDate) {
+          where.invoiceDate = {};
+          if (input.startDate) where.invoiceDate.gte = input.startDate;
+          if (input.endDate) where.invoiceDate.lte = input.endDate;
+        }
+
+        if (input?.statuses && input.statuses.length > 0) {
+          where.invoiceStatus = { in: input.statuses };
+        }
+
+        if (input?.clientTypes && input.clientTypes.length > 0) {
+          where.clientType = { in: input.clientTypes };
+        }
+
+        const entries = await ctx.db.revenueEntry.findMany({ where });
+
+        // Group entries by invoice number
+        const grouped = new Map<
+          string,
+          {
+            revenue: number;
+            taxReservation: number;
+            clientType: string | null;
+            invoiceStatus: string | null;
+            invoiceDate: Date | null;
+            entryCount: number;
+          }
+        >();
+
+        for (const entry of entries) {
+          const invoiceNumber = entry.invoiceNumber!;
+          const current = grouped.get(invoiceNumber) ?? {
+            revenue: 0,
+            taxReservation: 0,
+            clientType: entry.clientType,
+            invoiceStatus: entry.invoiceStatus,
+            invoiceDate: entry.invoiceDate,
+            entryCount: 0,
+          };
+          current.revenue += entry.revenue ?? 0;
+          current.taxReservation += entry.taxReservation ?? 0;
+          current.entryCount += 1;
+          grouped.set(invoiceNumber, current);
+        }
+
+        return Array.from(grouped.entries())
+          .map(([invoiceNumber, data]) => ({
+            invoiceNumber,
+            ...data,
+          }))
+          .sort((a, b) => {
+            // Sort by invoice date descending (newest first)
+            if (a.invoiceDate && b.invoiceDate) {
+              return b.invoiceDate.getTime() - a.invoiceDate.getTime();
+            }
+            if (a.invoiceDate) return -1;
+            if (b.invoiceDate) return 1;
+            return 0;
+          });
+      }),
+
+    invoiceFilterOptions: protectedProcedure.query(async ({ ctx }) => {
+      const entries = await ctx.db.revenueEntry.findMany({
+        where: { userId: ctx.userId, invoiceNumber: { not: null } },
+        select: { invoiceStatus: true, clientType: true },
+      });
+
+      const statuses = [
+        ...new Set(entries.map((e) => e.invoiceStatus).filter(Boolean)),
+      ] as string[];
+      const clientTypes = [
+        ...new Set(entries.map((e) => e.clientType).filter(Boolean)),
+      ] as string[];
+
+      return { statuses: statuses.sort(), clientTypes: clientTypes.sort() };
     }),
   }),
 });
