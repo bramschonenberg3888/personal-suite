@@ -186,12 +186,15 @@ model TrackedProduct {
   product           Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   targetPrice       Float?
   alertOnSale       Boolean          @default(true)
+  isFavorite        Boolean          @default(false)
+  userCategory      String?
   createdAt         DateTime         @default(now())
   comparisonGroupId String?
   comparisonGroup   ComparisonGroup? @relation(fields: [comparisonGroupId], references: [id], onDelete: SetNull)
 
   @@unique([userId, productId])
   @@index([comparisonGroupId])
+  @@index([userId, isFavorite])
 }
 
 model ComparisonGroup {

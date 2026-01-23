@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { createTRPCRouter, protectedProcedure } from '../init';
 import * as albertHeijn from '@/lib/api/albert-heijn';
 import * as jumbo from '@/lib/api/jumbo';
+import {
+  calculatePriceStats,
+  calculateWeeklyPriceDrop,
+  filterByPeriod,
+  type Period,
+} from '@/lib/utils/price-analytics';
 
 export const shopperRouter = createTRPCRouter({
   // Supermarket management
@@ -379,6 +385,24 @@ export const shopperRouter = createTRPCRouter({
           },
         });
       }),
+
+    toggleFavorite: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const product = await ctx.db.trackedProduct.findUnique({
+          where: { id: input.id, userId: ctx.userId },
+          select: { isFavorite: true },
+        });
+
+        if (!product) {
+          throw new Error('Product not found');
+        }
+
+        return ctx.db.trackedProduct.update({
+          where: { id: input.id, userId: ctx.userId },
+          data: { isFavorite: !product.isFavorite },
+        });
+      }),
   }),
 
   // Price alerts
@@ -587,6 +611,174 @@ export const shopperRouter = createTRPCRouter({
           where: {
             id: input.groupId,
             userId: ctx.userId,
+          },
+        });
+      }),
+  }),
+
+  // Statistics and analytics
+  stats: createTRPCRouter({
+    getOverview: protectedProcedure.query(async ({ ctx }) => {
+      const trackedProducts = await ctx.db.trackedProduct.findMany({
+        where: { userId: ctx.userId },
+        include: {
+          product: {
+            include: {
+              priceHistory: {
+                orderBy: { recordedAt: 'desc' },
+                take: 30,
+              },
+            },
+          },
+        },
+      });
+
+      let priceDropsThisWeek = 0;
+      let potentialSavings = 0;
+      let productsAtHistoricalLow = 0;
+
+      for (const tracked of trackedProducts) {
+        const { product } = tracked;
+        const priceHistory = product.priceHistory || [];
+
+        // Calculate weekly price drop
+        const weeklyDrop = calculateWeeklyPriceDrop(priceHistory, product.currentPrice);
+        if (weeklyDrop > 0) {
+          priceDropsThisWeek++;
+        }
+
+        // Calculate potential savings if below target
+        if (tracked.targetPrice && product.currentPrice < tracked.targetPrice) {
+          potentialSavings += tracked.targetPrice - product.currentPrice;
+        }
+
+        // Check if at historical low
+        const stats = calculatePriceStats(priceHistory, product.currentPrice);
+        if (stats.isAtHistoricalLow && priceHistory.length > 1) {
+          productsAtHistoricalLow++;
+        }
+      }
+
+      return {
+        totalTracked: trackedProducts.length,
+        priceDropsThisWeek,
+        potentialSavings,
+        productsAtHistoricalLow,
+      };
+    }),
+
+    getPriceHistory: protectedProcedure
+      .input(
+        z.object({
+          productId: z.string(),
+          period: z.enum(['7d', '30d', '90d', 'all']).default('30d'),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const product = await ctx.db.product.findUnique({
+          where: { id: input.productId },
+          include: {
+            priceHistory: {
+              orderBy: { recordedAt: 'asc' },
+            },
+          },
+        });
+
+        if (!product) {
+          throw new Error('Product not found');
+        }
+
+        const filteredHistory = filterByPeriod(product.priceHistory, input.period as Period);
+
+        const stats = calculatePriceStats(filteredHistory, product.currentPrice);
+
+        return {
+          history: filteredHistory,
+          stats,
+          currentPrice: product.currentPrice,
+        };
+      }),
+
+    getBestDeals: protectedProcedure.query(async ({ ctx }) => {
+      const trackedProducts = await ctx.db.trackedProduct.findMany({
+        where: { userId: ctx.userId },
+        include: {
+          product: {
+            include: {
+              supermarket: true,
+              priceHistory: {
+                orderBy: { recordedAt: 'desc' },
+                take: 30,
+              },
+            },
+          },
+        },
+      });
+
+      const dealsWithDrops = trackedProducts
+        .map((tracked) => {
+          const { product } = tracked;
+          const priceDrop = calculateWeeklyPriceDrop(
+            product.priceHistory || [],
+            product.currentPrice
+          );
+          const percentageDrop =
+            priceDrop > 0 && product.priceHistory[0]
+              ? (priceDrop / (product.currentPrice + priceDrop)) * 100
+              : 0;
+
+          return {
+            id: tracked.id,
+            productId: product.id,
+            name: product.name,
+            imageUrl: product.imageUrl,
+            supermarket: product.supermarket.name,
+            currentPrice: product.currentPrice,
+            priceDrop,
+            percentageDrop,
+          };
+        })
+        .filter((deal) => deal.priceDrop > 0)
+        .sort((a, b) => b.percentageDrop - a.percentageDrop)
+        .slice(0, 5);
+
+      return dealsWithDrops;
+    }),
+  }),
+
+  // User categories for products
+  categories: createTRPCRouter({
+    getAll: protectedProcedure.query(async ({ ctx }) => {
+      const products = await ctx.db.trackedProduct.findMany({
+        where: {
+          userId: ctx.userId,
+          userCategory: { not: null },
+        },
+        select: { userCategory: true },
+        distinct: ['userCategory'],
+      });
+
+      return products
+        .map((p) => p.userCategory)
+        .filter((c): c is string => c !== null)
+        .sort();
+    }),
+
+    setCategory: protectedProcedure
+      .input(
+        z.object({
+          trackedProductId: z.string(),
+          category: z.string().nullable(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return ctx.db.trackedProduct.update({
+          where: {
+            id: input.trackedProductId,
+            userId: ctx.userId,
+          },
+          data: {
+            userCategory: input.category,
           },
         });
       }),

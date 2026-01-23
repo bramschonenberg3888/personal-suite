@@ -18,15 +18,36 @@ import { TrackedProductCard } from '@/components/shopper/tracked-product-card';
 import { SupermarketFilter } from '@/components/shopper/supermarket-filter';
 import { ComparisonGroupCard } from '@/components/shopper/comparison-group-card';
 import { AddToComparisonDialog } from '@/components/shopper/add-to-comparison-dialog';
-import { RefreshCw, Bell, ShoppingCart, ArrowUpDown, Filter, GitCompare } from 'lucide-react';
+import { DashboardWidgets } from '@/components/shopper/dashboard-widgets';
+import { BestDealsWidget } from '@/components/shopper/best-deals-widget';
+import {
+  RefreshCw,
+  Bell,
+  ShoppingCart,
+  ArrowUpDown,
+  Filter,
+  GitCompare,
+  Star,
+  Search,
+} from 'lucide-react';
 
-type SortOption = 'date' | 'name' | 'price-asc' | 'price-desc' | 'supermarket';
+type SortOption =
+  | 'date'
+  | 'name'
+  | 'price-asc'
+  | 'price-desc'
+  | 'supermarket'
+  | 'favorites'
+  | 'unit-price';
 type FilterOption = 'all' | 'Albert Heijn' | 'Jumbo';
 
 export default function ShopperPage() {
   const utils = trpc.useUtils();
+  const [activeTab, setActiveTab] = useState('tracked');
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [comparisonDialogOpen, setComparisonDialogOpen] = useState(false);
   const [selectedProductForComparison, setSelectedProductForComparison] = useState<string | null>(
     null
@@ -46,6 +67,8 @@ export default function ShopperPage() {
   const { data: comparisonGroups, isLoading: comparisonLoading } =
     trpc.shopper.comparison.getAll.useQuery();
 
+  const { data: categories = [] } = trpc.shopper.categories.getAll.useQuery();
+
   // Get unique supermarkets from tracked products for filter options
   const availableSupermarkets = useMemo(() => {
     if (!trackedProducts) return [];
@@ -59,9 +82,19 @@ export default function ShopperPage() {
 
     let filtered = trackedProducts;
 
-    // Apply filter
+    // Apply favorites filter
+    if (showFavoritesOnly) {
+      filtered = filtered.filter((t) => t.isFavorite);
+    }
+
+    // Apply supermarket filter
     if (filterBy !== 'all') {
       filtered = filtered.filter((t) => t.product.supermarket.name === filterBy);
+    }
+
+    // Apply category filter
+    if (categoryFilter !== 'all') {
+      filtered = filtered.filter((t) => t.userCategory === categoryFilter);
     }
 
     // Apply sort
@@ -75,18 +108,27 @@ export default function ShopperPage() {
           return b.product.currentPrice - a.product.currentPrice;
         case 'supermarket':
           return a.product.supermarket.name.localeCompare(b.product.supermarket.name);
+        case 'favorites':
+          if (a.isFavorite === b.isFavorite) {
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          }
+          return a.isFavorite ? -1 : 1;
+        case 'unit-price':
+          // For now, just sort by price - could be enhanced with unit price calculation
+          return a.product.currentPrice - b.product.currentPrice;
         case 'date':
         default:
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
     });
-  }, [trackedProducts, sortBy, filterBy]);
+  }, [trackedProducts, sortBy, filterBy, categoryFilter, showFavoritesOnly]);
 
   const { data: alerts } = trpc.shopper.alerts.getActive.useQuery();
 
   const trackProduct = trpc.shopper.tracked.track.useMutation({
     onSuccess: () => {
       utils.shopper.tracked.getAll.invalidate();
+      utils.shopper.stats.getOverview.invalidate();
     },
   });
 
@@ -94,6 +136,7 @@ export default function ShopperPage() {
     onSuccess: () => {
       utils.shopper.tracked.getAll.invalidate();
       utils.shopper.alerts.getActive.invalidate();
+      utils.shopper.stats.getOverview.invalidate();
     },
   });
 
@@ -101,6 +144,13 @@ export default function ShopperPage() {
     onSuccess: () => {
       utils.shopper.tracked.getAll.invalidate();
       utils.shopper.alerts.getActive.invalidate();
+      utils.shopper.stats.getOverview.invalidate();
+    },
+  });
+
+  const toggleFavorite = trpc.shopper.tracked.toggleFavorite.useMutation({
+    onSuccess: () => {
+      utils.shopper.tracked.getAll.invalidate();
     },
   });
 
@@ -108,6 +158,8 @@ export default function ShopperPage() {
     onSuccess: () => {
       utils.shopper.tracked.getAll.invalidate();
       utils.shopper.alerts.getActive.invalidate();
+      utils.shopper.stats.getOverview.invalidate();
+      utils.shopper.stats.getBestDeals.invalidate();
     },
   });
 
@@ -211,6 +263,12 @@ export default function ShopperPage() {
         </Button>
       </div>
 
+      {/* Dashboard Widgets */}
+      <DashboardWidgets />
+
+      {/* Best Deals Widget */}
+      <BestDealsWidget />
+
       {alerts && alerts.length > 0 && (
         <Card className="border-green-500 bg-green-50 dark:bg-green-950">
           <CardHeader className="pb-2">
@@ -244,7 +302,7 @@ export default function ShopperPage() {
         </Card>
       )}
 
-      <Tabs defaultValue="tracked">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="tracked">
             <ShoppingCart className="mr-2 h-4 w-4" />
@@ -268,10 +326,21 @@ export default function ShopperPage() {
             <>
               {/* Sort and Filter Controls */}
               <div className="flex flex-wrap items-center gap-4">
+                {/* Favorites Toggle */}
+                <Button
+                  variant={showFavoritesOnly ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                  className="gap-2"
+                >
+                  <Star className={`h-4 w-4 ${showFavoritesOnly ? 'fill-current' : ''}`} />
+                  Favorites
+                </Button>
+
                 <div className="flex items-center gap-2">
                   <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
                   <Select value={sortBy} onValueChange={(v: string) => setSortBy(v as SortOption)}>
-                    <SelectTrigger className="w-[160px]">
+                    <SelectTrigger className="w-[180px]">
                       <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
                     <SelectContent>
@@ -280,6 +349,8 @@ export default function ShopperPage() {
                       <SelectItem value="price-asc">Price: Low to High</SelectItem>
                       <SelectItem value="price-desc">Price: High to Low</SelectItem>
                       <SelectItem value="supermarket">Supermarket</SelectItem>
+                      <SelectItem value="favorites">Favorites First</SelectItem>
+                      <SelectItem value="unit-price">Unit Price: Low to High</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -306,7 +377,23 @@ export default function ShopperPage() {
                   </div>
                 )}
 
-                {filterBy !== 'all' && (
+                {categories.length > 0 && (
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {(filterBy !== 'all' || showFavoritesOnly || categoryFilter !== 'all') && (
                   <span className="text-sm text-muted-foreground">
                     Showing {sortedAndFilteredProducts.length} of {trackedProducts.length} products
                   </span>
@@ -322,22 +409,28 @@ export default function ShopperPage() {
                     onSetTargetPrice={(id, price) =>
                       setTargetPrice.mutate({ id, targetPrice: price })
                     }
+                    onToggleFavorite={(id) => toggleFavorite.mutate({ id })}
                     onAddToComparison={handleOpenComparisonDialog}
+                    onTrackFromOtherStore={handleTrack}
                     isRemoving={untrackProduct.isPending}
+                    isTracking={trackProduct.isPending}
                   />
                 ))}
               </div>
             </>
           ) : (
             <Card>
-              <CardContent className="py-8 text-center">
-                <ShoppingCart className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">
-                  You&#39;re not tracking any products yet.
+              <CardContent className="py-12 text-center">
+                <ShoppingCart className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Start tracking products</h3>
+                <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+                  Search for your favorite products and add them to your tracking list to monitor
+                  price changes over time.
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  Switch to the Search tab to find products to track.
-                </p>
+                <Button onClick={() => setActiveTab('search')}>
+                  <Search className="mr-2 h-4 w-4" />
+                  Search Products
+                </Button>
               </CardContent>
             </Card>
           )}
@@ -371,12 +464,12 @@ export default function ShopperPage() {
             </div>
           ) : (
             <Card>
-              <CardContent className="py-8 text-center">
-                <GitCompare className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">No price comparisons yet.</p>
-                <p className="text-sm text-muted-foreground">
-                  Track products from both stores, then click the compare button to see prices side
-                  by side.
+              <CardContent className="py-12 text-center">
+                <GitCompare className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Compare prices across stores</h3>
+                <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+                  Track the same product from different stores to compare prices and find the best
+                  deals. Click the compare button on any tracked product to get started.
                 </p>
               </CardContent>
             </Card>
