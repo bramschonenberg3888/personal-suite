@@ -58,6 +58,7 @@ model User {
   notionConnection  NotionConnection?
   revenueEntries    RevenueEntry[]
   costEntries       CostEntry[]
+  revenueTargets    RevenueTarget[]
 }
 
 model VerificationToken {
@@ -298,4 +299,18 @@ model CostEntry {
   @@index([userId])
   @@index([userId, year])
   @@index([invoiceDate])
+}
+
+model RevenueTarget {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year        Int
+  targetValue Float    // Annual revenue target
+  notes       String?  // Optional notes about the target
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, year])
+  @@index([userId])
 }

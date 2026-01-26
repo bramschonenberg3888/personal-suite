@@ -241,12 +241,17 @@ async function resolvePageTitles(notion: Client, pageIds: string[]): Promise<Map
             for (const [, prop] of Object.entries(page.properties)) {
               if (prop.type === 'title') {
                 const title = prop.title.map((t) => t.plain_text).join('');
-                return { id: pageId, title };
+                return { id: pageId, title: title || null };
               }
             }
           }
           return { id: pageId, title: null };
-        } catch {
+        } catch (error) {
+          // Log error for debugging - the integration might not have access to this page
+          console.warn(
+            `[Notion] Failed to resolve page title for ${pageId}:`,
+            error instanceof Error ? error.message : 'Unknown error'
+          );
           return { id: pageId, title: null };
         }
       })
@@ -293,22 +298,30 @@ export async function fetchAllTimeEntries(databaseId: string): Promise<TimeEntry
 
   // Collect all unique client page IDs that need resolution
   const clientPageIds = new Set<string>();
+  let entriesWithClientRelations = 0;
   for (const parsed of parsedEntries) {
     if (parsed.clientRelationIds?.length) {
+      entriesWithClientRelations++;
       for (const id of parsed.clientRelationIds) {
         clientPageIds.add(id);
       }
     }
   }
 
+  console.log(
+    `[Notion Sync] Found ${parsedEntries.length} entries, ${entriesWithClientRelations} have client relations, ${clientPageIds.size} unique client pages to resolve`
+  );
+
   // Resolve client names if there are any relation IDs
   let clientNameMap = new Map<string, string>();
   if (clientPageIds.size > 0) {
     clientNameMap = await resolvePageTitles(notion, Array.from(clientPageIds));
+    console.log(`[Notion Sync] Successfully resolved ${clientNameMap.size} client names`);
   }
 
   // Build final entries with resolved client names
-  return parsedEntries.map((parsed) => {
+  let resolvedClients = 0;
+  const result = parsedEntries.map((parsed) => {
     const entry = parsed.entry;
     if (parsed.clientRelationIds?.length && !entry.client) {
       // Use the first relation's resolved name
@@ -317,8 +330,13 @@ export async function fetchAllTimeEntries(databaseId: string): Promise<TimeEntry
         .find((name) => name);
       if (firstName) {
         entry.client = firstName;
+        resolvedClients++;
       }
     }
     return entry;
   });
+
+  console.log(`[Notion Sync] Assigned client names to ${resolvedClients} entries`);
+
+  return result;
 }

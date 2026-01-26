@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/table';
 import { trpc } from '@/trpc/client';
 import { NotionSettingsDialog } from '@/components/revenue/notion-settings-dialog';
+import { getWeek } from 'date-fns';
 
 const VAT_RATE = 0.21;
 
@@ -70,6 +71,7 @@ export function InvoicesDashboard() {
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedQuarter, setSelectedQuarter] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [selectedWeek, setSelectedWeek] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedClientType, setSelectedClientType] = useState<string>('all');
 
@@ -95,13 +97,14 @@ export function InvoicesDashboard() {
     },
   });
 
-  // Derive available years, quarters, months from invoice data
+  // Derive available years, quarters, months, weeks from invoice data
   const dateFilters = useMemo(() => {
-    if (!invoices) return { years: [], quarters: [], months: [] };
+    if (!invoices) return { years: [], quarters: [], months: [], weeks: [] };
 
     const years = new Set<number>();
     const quarters = new Set<string>();
     const months = new Set<number>();
+    const weeks = new Set<number>();
 
     for (const inv of invoices) {
       if (inv.invoiceDate) {
@@ -109,6 +112,7 @@ export function InvoicesDashboard() {
         years.add(date.getFullYear());
         quarters.add(`Q${Math.ceil((date.getMonth() + 1) / 3)}`);
         months.add(date.getMonth() + 1);
+        weeks.add(getWeek(date, { weekStartsOn: 1 }));
       }
     }
 
@@ -116,6 +120,7 @@ export function InvoicesDashboard() {
       years: Array.from(years).sort((a, b) => b - a),
       quarters: ['Q1', 'Q2', 'Q3', 'Q4'].filter((q) => quarters.has(q)),
       months: Array.from(months).sort((a, b) => a - b),
+      weeks: Array.from(weeks).sort((a, b) => a - b),
     };
   }, [invoices]);
 
@@ -130,10 +135,12 @@ export function InvoicesDashboard() {
         const year = date.getFullYear();
         const quarter = `Q${Math.ceil((date.getMonth() + 1) / 3)}`;
         const month = date.getMonth() + 1;
+        const week = getWeek(date, { weekStartsOn: 1 });
 
         if (selectedYear !== 'all' && year !== parseInt(selectedYear)) return false;
         if (selectedQuarter !== 'all' && quarter !== selectedQuarter) return false;
         if (selectedMonth !== 'all' && month !== parseInt(selectedMonth)) return false;
+        if (selectedWeek !== 'all' && week !== parseInt(selectedWeek)) return false;
 
         return true;
       })
@@ -143,7 +150,7 @@ export function InvoicesDashboard() {
         if (dateA !== dateB) return dateB - dateA;
         return (b.invoiceNumber ?? '').localeCompare(a.invoiceNumber ?? '');
       });
-  }, [invoices, selectedYear, selectedQuarter, selectedMonth]);
+  }, [invoices, selectedYear, selectedQuarter, selectedMonth, selectedWeek]);
 
   // Group invoices by year
   const groupedByYear = useMemo(() => {
@@ -272,6 +279,7 @@ export function InvoicesDashboard() {
     setSelectedYear('all');
     setSelectedQuarter('all');
     setSelectedMonth('all');
+    setSelectedWeek('all');
     setSelectedStatus('all');
     setSelectedClientType('all');
   };
@@ -280,6 +288,7 @@ export function InvoicesDashboard() {
     selectedYear !== 'all' ||
     selectedQuarter !== 'all' ||
     selectedMonth !== 'all' ||
+    selectedWeek !== 'all' ||
     selectedStatus !== 'all' ||
     selectedClientType !== 'all';
 
@@ -438,6 +447,23 @@ export function InvoicesDashboard() {
                   {dateFilters.months.map((m) => (
                     <SelectItem key={m} value={m.toString()}>
                       {monthNames[m - 1]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Week</label>
+              <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                <SelectTrigger className="w-28">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {dateFilters.weeks.map((w) => (
+                    <SelectItem key={w} value={w.toString()}>
+                      Week {w}
                     </SelectItem>
                   ))}
                 </SelectContent>

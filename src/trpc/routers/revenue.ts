@@ -486,4 +486,272 @@ export const revenueRouter = createTRPCRouter({
       return { statuses: statuses.sort(), clientTypes: clientTypes.sort() };
     }),
   }),
+
+  // Target management
+  targets: createTRPCRouter({
+    get: protectedProcedure.input(z.object({ year: z.number() })).query(async ({ ctx, input }) => {
+      return ctx.db.revenueTarget.findUnique({
+        where: {
+          userId_year: {
+            userId: ctx.userId,
+            year: input.year,
+          },
+        },
+      });
+    }),
+
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return ctx.db.revenueTarget.findMany({
+        where: { userId: ctx.userId },
+        orderBy: { year: 'desc' },
+      });
+    }),
+
+    upsert: protectedProcedure
+      .input(
+        z.object({
+          year: z.number(),
+          targetValue: z.number().min(0),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return ctx.db.revenueTarget.upsert({
+          where: {
+            userId_year: {
+              userId: ctx.userId,
+              year: input.year,
+            },
+          },
+          create: {
+            userId: ctx.userId,
+            year: input.year,
+            targetValue: input.targetValue,
+            notes: input.notes,
+          },
+          update: {
+            targetValue: input.targetValue,
+            notes: input.notes,
+          },
+        });
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ year: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return ctx.db.revenueTarget.delete({
+          where: {
+            userId_year: {
+              userId: ctx.userId,
+              year: input.year,
+            },
+          },
+        });
+      }),
+
+    // Get comprehensive target analytics for a year
+    analytics: protectedProcedure
+      .input(z.object({ year: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const [target, entries] = await Promise.all([
+          ctx.db.revenueTarget.findUnique({
+            where: {
+              userId_year: {
+                userId: ctx.userId,
+                year: input.year,
+              },
+            },
+          }),
+          ctx.db.revenueEntry.findMany({
+            where: {
+              userId: ctx.userId,
+              year: input.year,
+            },
+          }),
+        ]);
+
+        if (!target) {
+          return null;
+        }
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // 1-indexed
+        const isCurrentYear = input.year === currentYear;
+
+        // Calculate total revenue achieved
+        const totalRevenue = entries.reduce((sum, e) => sum + (e.revenue ?? 0), 0);
+
+        // Calculate revenue by month
+        const monthlyRevenue = new Map<number, number>();
+        for (const entry of entries) {
+          if (entry.monthNumber) {
+            const current = monthlyRevenue.get(entry.monthNumber) ?? 0;
+            monthlyRevenue.set(entry.monthNumber, current + (entry.revenue ?? 0));
+          }
+        }
+
+        // Progress calculations
+        const progressPercent = (totalRevenue / target.targetValue) * 100;
+        const remainingTarget = Math.max(0, target.targetValue - totalRevenue);
+
+        // Time-based calculations
+        const totalMonths = 12;
+        const elapsedMonths = isCurrentYear ? currentMonth : 12;
+        const remainingMonths = isCurrentYear ? 12 - currentMonth : 0;
+
+        // Expected revenue at this point (linear distribution)
+        const expectedRevenue = (target.targetValue / totalMonths) * elapsedMonths;
+        const paceVariance = totalRevenue - expectedRevenue;
+        const isOnPace = paceVariance >= 0;
+
+        // Dynamic monthly target (adjusts based on progress)
+        const requiredMonthlyAverage = remainingMonths > 0 ? remainingTarget / remainingMonths : 0;
+
+        // Original monthly target (static)
+        const originalMonthlyTarget = target.targetValue / totalMonths;
+
+        // Projected year-end revenue based on current pace
+        const monthlyAverageActual = elapsedMonths > 0 ? totalRevenue / elapsedMonths : 0;
+        const projectedYearEnd = monthlyAverageActual * totalMonths;
+
+        // Monthly breakdown with targets vs actuals
+        const monthlyBreakdown = Array.from({ length: 12 }, (_, i) => {
+          const month = i + 1;
+          const actual = monthlyRevenue.get(month) ?? 0;
+
+          // Calculate cumulative values
+          let cumulativeActual = 0;
+          for (let m = 1; m <= month; m++) {
+            cumulativeActual += monthlyRevenue.get(m) ?? 0;
+          }
+          const cumulativeTarget = originalMonthlyTarget * month;
+
+          // Calculate dynamic target for remaining months
+          let dynamicTarget = originalMonthlyTarget;
+          if (isCurrentYear && month > currentMonth) {
+            // Future months get adjusted target based on remaining revenue
+            dynamicTarget = requiredMonthlyAverage;
+          }
+
+          return {
+            month,
+            monthName: [
+              'Jan',
+              'Feb',
+              'Mar',
+              'Apr',
+              'May',
+              'Jun',
+              'Jul',
+              'Aug',
+              'Sep',
+              'Oct',
+              'Nov',
+              'Dec',
+            ][i],
+            actual,
+            target: originalMonthlyTarget,
+            dynamicTarget,
+            cumulativeActual,
+            cumulativeTarget,
+            variance: actual - originalMonthlyTarget,
+            isAchieved: actual >= originalMonthlyTarget,
+            isFuture: isCurrentYear && month > currentMonth,
+            isCurrent: isCurrentYear && month === currentMonth,
+          };
+        });
+
+        // Quarterly breakdown
+        const quarterlyBreakdown = [1, 2, 3, 4].map((quarter) => {
+          const startMonth = (quarter - 1) * 3 + 1;
+          const endMonth = quarter * 3;
+          let actual = 0;
+          for (let m = startMonth; m <= endMonth; m++) {
+            actual += monthlyRevenue.get(m) ?? 0;
+          }
+          const quarterTarget = target.targetValue / 4;
+
+          return {
+            quarter: `Q${quarter}`,
+            actual,
+            target: quarterTarget,
+            variance: actual - quarterTarget,
+            progressPercent: (actual / quarterTarget) * 100,
+            isFuture: isCurrentYear && startMonth > currentMonth,
+          };
+        });
+
+        // Calculate best/worst months
+        const monthsWithRevenue = monthlyBreakdown.filter((m) => m.actual > 0);
+        const bestMonth =
+          monthsWithRevenue.length > 0
+            ? monthsWithRevenue.reduce((best, m) => (m.actual > best.actual ? m : best))
+            : null;
+        const worstMonth =
+          monthsWithRevenue.length > 0
+            ? monthsWithRevenue.reduce((worst, m) => (m.actual < worst.actual ? m : worst))
+            : null;
+
+        // Days remaining in the year
+        const endOfYear = new Date(input.year, 11, 31);
+        const daysRemaining = isCurrentYear
+          ? Math.ceil((endOfYear.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          : 0;
+
+        // Daily required revenue
+        const dailyRequired = daysRemaining > 0 ? remainingTarget / daysRemaining : 0;
+
+        // Weekly required revenue
+        const weeksRemaining = Math.ceil(daysRemaining / 7);
+        const weeklyRequired = weeksRemaining > 0 ? remainingTarget / weeksRemaining : 0;
+
+        return {
+          target: target.targetValue,
+          notes: target.notes,
+          year: input.year,
+
+          // Progress
+          totalRevenue,
+          progressPercent,
+          remainingTarget,
+
+          // Time context
+          isCurrentYear,
+          elapsedMonths,
+          remainingMonths,
+          daysRemaining,
+
+          // Pacing
+          expectedRevenue,
+          paceVariance,
+          isOnPace,
+          pacePercent: expectedRevenue > 0 ? (totalRevenue / expectedRevenue) * 100 : 0,
+
+          // Dynamic targets
+          originalMonthlyTarget,
+          requiredMonthlyAverage,
+          dailyRequired,
+          weeklyRequired,
+
+          // Projections
+          projectedYearEnd,
+          projectedVsTarget: projectedYearEnd - target.targetValue,
+          willMeetTarget: projectedYearEnd >= target.targetValue,
+
+          // Averages
+          monthlyAverageActual,
+
+          // Breakdowns
+          monthlyBreakdown,
+          quarterlyBreakdown,
+
+          // Highlights
+          bestMonth: bestMonth ? { month: bestMonth.monthName, revenue: bestMonth.actual } : null,
+          worstMonth: worstMonth
+            ? { month: worstMonth.monthName, revenue: worstMonth.actual }
+            : null,
+        };
+      }),
+  }),
 });
