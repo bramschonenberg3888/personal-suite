@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   AreaChart,
   Area,
@@ -14,8 +14,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
-  ReferenceLine,
-  ReferenceArea,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -28,11 +26,9 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/trpc/client';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 
 interface InteractiveMetricsChartProps {
   startDate?: Date;
@@ -58,6 +54,33 @@ function formatHours(value: number): string {
   return `${value.toFixed(1)}h`;
 }
 
+function formatPeriodLabel(period: string): string {
+  // Handle month format: "2024-januari" → "Jan '24"
+  const monthMatch = period.match(/^(\d{4})-(\w+)$/);
+  if (monthMatch) {
+    const [, year, month] = monthMatch;
+    const monthAbbrev = month.slice(0, 3).charAt(0).toUpperCase() + month.slice(1, 3);
+    return `${monthAbbrev} '${year.slice(2)}`;
+  }
+
+  // Handle week format: "2024-W01" → "W1 '24"
+  const weekMatch = period.match(/^(\d{4})-W(\d{2})$/);
+  if (weekMatch) {
+    const [, year, week] = weekMatch;
+    return `W${parseInt(week)} '${year.slice(2)}`;
+  }
+
+  // Handle quarter format: "2024 Q1" → "Q1 '24"
+  const quarterMatch = period.match(/^(\d{4}) Q(\d)$/);
+  if (quarterMatch) {
+    const [, year, quarter] = quarterMatch;
+    return `Q${quarter} '${year.slice(2)}`;
+  }
+
+  // Return as-is for year or unknown formats
+  return period;
+}
+
 function formatValue(value: number, metric: Metric): string {
   return metric === 'hours' ? formatHours(value) : formatCurrency(value);
 }
@@ -79,21 +102,35 @@ export function InteractiveMetricsChart({
   endDate,
   clients,
 }: InteractiveMetricsChartProps) {
-  // Chart configuration state
-  const [chartType, setChartType] = useState<ChartType>('area');
-  const [metric, setMetric] = useState<Metric>('revenue');
-  const [groupBy, setGroupBy] = useState<GroupBy>('month');
-  const [cumulative, setCumulative] = useState(false);
-  const [billableOnly, setBillableOnly] = useState(false);
-  const [movingAverage, setMovingAverage] = useState<MovingAverage>(0);
+  // Chart configuration state (persisted)
+  const [chartType, setChartType] = usePersistedState<ChartType>(
+    'finance.revenue.chart.chartType',
+    'area'
+  );
+  const [metric, setMetric] = usePersistedState<Metric>('finance.revenue.chart.metric', 'revenue');
+  const [groupBy, setGroupBy] = usePersistedState<GroupBy>(
+    'finance.revenue.chart.groupBy',
+    'month'
+  );
+  const [cumulative, setCumulative] = usePersistedState('finance.revenue.chart.cumulative', false);
+  const [billableOnly, setBillableOnly] = usePersistedState(
+    'finance.revenue.chart.billableOnly',
+    false
+  );
+  const [movingAverage, setMovingAverage] = usePersistedState<MovingAverage>(
+    'finance.revenue.chart.movingAverage',
+    0
+  );
 
-  // Compare mode
-  const [compareMode, setCompareMode] = useState<CompareMode>('none');
-  const [secondaryMetric, setSecondaryMetric] = useState<Metric>('hours');
-
-  // Target tracking
-  const [targetValue, setTargetValue] = useState<number | null>(null);
-  const [targetPeriod, setTargetPeriod] = useState<'year' | 'quarter' | 'month'>('year');
+  // Compare mode (persisted)
+  const [compareMode, setCompareMode] = usePersistedState<CompareMode>(
+    'finance.revenue.chart.compareMode',
+    'none'
+  );
+  const [secondaryMetric, setSecondaryMetric] = usePersistedState<Metric>(
+    'finance.revenue.chart.secondaryMetric',
+    'hours'
+  );
 
   // Fetch data
   const { data, isLoading } = trpc.revenue.entries.byPeriod.useQuery({
@@ -247,64 +284,6 @@ export function InteractiveMetricsChart({
     return transformed;
   }, [data, generatePeriods, cumulative, movingAverage, metric]);
 
-  // Calculate target progress
-  const targetProgress = useMemo(() => {
-    if (!targetValue || !chartData.length) return null;
-
-    const total = chartData[chartData.length - 1]?.[metric] ?? 0;
-    const currentValue = cumulative ? total : chartData.reduce((sum, d) => sum + d[metric], 0);
-    const percentage = Math.min((currentValue / targetValue) * 100, 100);
-    const remaining = Math.max(targetValue - currentValue, 0);
-
-    // Calculate elapsed time ratio based on target period
-    const now = new Date();
-    let elapsedRatio = 1;
-    let totalPeriods = 1;
-    let currentPeriod = 1;
-
-    if (targetPeriod === 'year') {
-      currentPeriod = now.getMonth() + 1;
-      totalPeriods = 12;
-      elapsedRatio = currentPeriod / totalPeriods;
-    } else if (targetPeriod === 'quarter') {
-      const quarterMonth = now.getMonth() % 3;
-      currentPeriod = quarterMonth + 1;
-      totalPeriods = 3;
-      elapsedRatio = currentPeriod / totalPeriods;
-    } else if (targetPeriod === 'month') {
-      currentPeriod = now.getDate();
-      totalPeriods = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      elapsedRatio = currentPeriod / totalPeriods;
-    }
-
-    const expectedProgress = targetValue * elapsedRatio;
-    const status: 'green' | 'yellow' | 'red' =
-      currentValue >= expectedProgress * 0.95
-        ? 'green'
-        : currentValue >= expectedProgress * 0.8
-          ? 'yellow'
-          : 'red';
-
-    // Calculate daily pace needed
-    const remainingDays = Math.max(1, Math.ceil((1 - elapsedRatio) * totalPeriods * 30));
-    const dailyPaceNeeded = remaining / remainingDays;
-
-    // Calculate projected value (simple linear projection)
-    const avgPerPeriod = currentValue / currentPeriod;
-    const projected = avgPerPeriod * totalPeriods;
-
-    return {
-      currentValue,
-      targetValue,
-      percentage,
-      remaining,
-      status,
-      dailyPaceNeeded,
-      projected,
-      expectedProgress,
-    };
-  }, [targetValue, targetPeriod, chartData, metric, cumulative]);
-
   // Primary color based on metric
   const primaryColor = METRIC_COLORS[metric];
   const secondaryColor = METRIC_COLORS[secondaryMetric];
@@ -330,20 +309,14 @@ export function InteractiveMetricsChart({
 
     const xAxisProps = {
       dataKey: 'period',
-      className: 'text-xs',
-      tick: { fill: 'currentColor' } as const,
+      tick: { fontSize: 12 },
+      tickFormatter: formatPeriodLabel,
     };
 
-    // Calculate Y-axis domain to include target value if set
-    const dataMax = Math.max(...chartData.map((d) => d[metric]));
-    const yMax = targetValue ? Math.max(dataMax, targetValue * 1.1) : dataMax;
-
     const yAxisProps = {
+      tick: { fontSize: 12 },
       tickFormatter: (value: number) => formatValue(value, metric),
-      className: 'text-xs',
-      tick: { fill: 'currentColor' } as const,
       width: 80,
-      domain: [0, yMax] as [number, number],
     };
 
     const tooltipProps = {
@@ -368,22 +341,6 @@ export function InteractiveMetricsChart({
         <YAxis {...yAxisProps} />
         <Tooltip {...tooltipProps} />
         <Legend />
-        {targetValue && (
-          <>
-            <ReferenceLine
-              y={targetValue}
-              stroke="#ef4444"
-              strokeDasharray="5 5"
-              label={{
-                value: `Target ${formatValue(targetValue, metric)}`,
-                fill: '#ef4444',
-                position: 'insideTopRight',
-                fontSize: 12,
-              }}
-            />
-            <ReferenceArea y1={0} y2={targetValue} fill="#10b981" fillOpacity={0.05} />
-          </>
-        )}
       </>
     );
 
@@ -623,82 +580,7 @@ export function InteractiveMetricsChart({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-6">
-        {/* Chart */}
-        {renderChart()}
-
-        {/* Target tracking section */}
-        <div className="space-y-4 border-t pt-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <Label className="text-sm font-medium">Target:</Label>
-            <Input
-              type="number"
-              placeholder="Enter target value"
-              className="w-40"
-              value={targetValue ?? ''}
-              onChange={(e) => setTargetValue(e.target.value ? Number(e.target.value) : null)}
-            />
-            <span className="text-sm text-muted-foreground">for</span>
-            <Select
-              value={targetPeriod}
-              onValueChange={(v) => setTargetPeriod(v as 'year' | 'quarter' | 'month')}
-            >
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="year">Year</SelectItem>
-                <SelectItem value="quarter">Quarter</SelectItem>
-                <SelectItem value="month">Month</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Progress card */}
-          {targetProgress && (
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-medium">Target Progress</span>
-                <Badge
-                  variant={
-                    targetProgress.status === 'green'
-                      ? 'default'
-                      : targetProgress.status === 'yellow'
-                        ? 'secondary'
-                        : 'destructive'
-                  }
-                >
-                  {targetProgress.status === 'green'
-                    ? 'On track'
-                    : targetProgress.status === 'yellow'
-                      ? 'At risk'
-                      : 'Behind'}
-                </Badge>
-              </div>
-
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <span>
-                  Current: <strong>{formatValue(targetProgress.currentValue, metric)}</strong>
-                </span>
-                <span>
-                  Target: <strong>{formatValue(targetProgress.targetValue, metric)}</strong>
-                </span>
-              </div>
-
-              <Progress value={targetProgress.percentage} className="mb-3 h-2" />
-
-              <div className="flex flex-wrap justify-between gap-2 text-sm text-muted-foreground">
-                <span>Remaining: {formatValue(targetProgress.remaining, metric)}</span>
-                <span>
-                  {metric === 'hours' ? 'Daily' : 'Daily'} pace needed:{' '}
-                  {formatValue(targetProgress.dailyPaceNeeded, metric)}
-                </span>
-                <span>Projected: {formatValue(targetProgress.projected, metric)}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </CardContent>
+      <CardContent>{renderChart()}</CardContent>
     </Card>
   );
 }

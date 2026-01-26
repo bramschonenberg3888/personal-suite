@@ -20,6 +20,7 @@ import { CostsSettingsDialog } from './costs-settings-dialog';
 import { CostsKpiCards } from './costs-kpi-cards';
 import { CostsChart } from './costs-chart';
 import { CostsSectionBreakdown } from './costs-section-breakdown';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 
 interface DateRange {
   from?: Date;
@@ -28,7 +29,10 @@ interface DateRange {
 
 export function CostsDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>({});
-  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [selectedSections, setSelectedSections] = usePersistedState<string[]>(
+    'finance.costs.selectedSections',
+    []
+  );
   const [sectionsOpen, setSectionsOpen] = useState(false);
 
   const utils = trpc.useUtils();

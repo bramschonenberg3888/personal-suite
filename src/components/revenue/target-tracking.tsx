@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -10,8 +9,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
-  LineChart,
-  Line,
   Legend,
   Cell,
 } from 'recharts';
@@ -38,6 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/trpc/client';
 import { TargetSettingsDialog } from './target-settings-dialog';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('nl-NL', {
@@ -61,7 +59,10 @@ function formatCurrencyCompact(value: number): string {
 
 export function TargetTracking() {
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedYear, setSelectedYear] = usePersistedState(
+    'finance.targets.selectedYear',
+    currentYear
+  );
 
   const { data: analytics, isLoading } = trpc.revenue.targets.analytics.useQuery({
     year: selectedYear,
@@ -98,7 +99,7 @@ export function TargetTracking() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Target className="h-5 w-5" />
-              Revenue Target
+              Revenue Goals
             </CardTitle>
             <div className="flex items-center gap-2">
               <Select
@@ -141,7 +142,7 @@ export function TargetTracking() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Target className="h-5 w-5" />
-              Revenue Target {selectedYear}
+              Revenue Goals {selectedYear}
             </CardTitle>
             <div className="flex items-center gap-2">
               <Select
@@ -394,68 +395,6 @@ export function TargetTracking() {
                 <div className="h-3 w-3 rounded bg-gray-200" />
                 <span>Future</span>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Cumulative Progress */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Cumulative Progress vs Target</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={analytics.monthlyBreakdown}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="monthName" tick={{ fontSize: 12 }} />
-                  <YAxis
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip
-                    formatter={(value, name) => [
-                      formatCurrency(value as number),
-                      name === 'cumulativeActual' ? 'Actual' : 'Target Pace',
-                    ]}
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '6px',
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="cumulativeTarget"
-                    name="Target Pace"
-                    stroke="#6b7280"
-                    strokeDasharray="5 5"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="cumulativeActual"
-                    name="Actual"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={{ fill: '#3b82f6', r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <ReferenceLine
-                    y={analytics.target}
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    label={{
-                      value: 'Annual Target',
-                      position: 'right',
-                      fontSize: 10,
-                      fill: '#10b981',
-                    }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>

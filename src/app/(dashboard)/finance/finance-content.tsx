@@ -4,9 +4,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RevenueDashboard } from '@/components/revenue/revenue-dashboard';
 import { CostsDashboard } from '@/components/costs/costs-dashboard';
 import { InvoicesDashboard } from '@/components/invoices/invoices-dashboard';
-import { DollarSign, Receipt, FileText } from 'lucide-react';
+import { TargetTracking } from '@/components/revenue/target-tracking';
+import { DollarSign, Receipt, FileText, Target } from 'lucide-react';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 
 export function FinanceContent() {
+  const [activeTab, setActiveTab] = usePersistedState('finance.activeTab', 'revenue');
+
   return (
     <div className="space-y-6">
       <div>
@@ -16,11 +20,15 @@ export function FinanceContent() {
         </p>
       </div>
 
-      <Tabs defaultValue="revenue" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="revenue" className="gap-2">
             <DollarSign className="h-4 w-4" />
             Revenue
+          </TabsTrigger>
+          <TabsTrigger value="targets" className="gap-2">
+            <Target className="h-4 w-4" />
+            Targets
           </TabsTrigger>
           <TabsTrigger value="invoices" className="gap-2">
             <FileText className="h-4 w-4" />
@@ -42,6 +50,10 @@ export function FinanceContent() {
 
         <TabsContent value="costs">
           <CostsDashboard />
+        </TabsContent>
+
+        <TabsContent value="targets">
+          <TargetTracking />
         </TabsContent>
       </Tabs>
     </div>

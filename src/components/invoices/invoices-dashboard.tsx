@@ -1,14 +1,19 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
   Cell,
   PieChart,
   Pie,
@@ -29,6 +34,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -47,6 +53,7 @@ import {
 import { trpc } from '@/trpc/client';
 import { NotionSettingsDialog } from '@/components/revenue/notion-settings-dialog';
 import { getWeek } from 'date-fns';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 
 const VAT_RATE = 0.21;
 
@@ -67,13 +74,36 @@ const CHART_COLORS = [
   '#06b6d4', // cyan
 ];
 
+type ChartType = 'bar' | 'line' | 'area';
+type ChartGroupBy = 'month' | 'quarter' | 'year';
+
 export function InvoicesDashboard() {
-  const [selectedYear, setSelectedYear] = useState<string>('all');
-  const [selectedQuarter, setSelectedQuarter] = useState<string>('all');
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  const [selectedWeek, setSelectedWeek] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedClientType, setSelectedClientType] = useState<string>('all');
+  const [selectedYear, setSelectedYear] = usePersistedState('finance.invoices.selectedYear', 'all');
+  const [selectedQuarter, setSelectedQuarter] = usePersistedState(
+    'finance.invoices.selectedQuarter',
+    'all'
+  );
+  const [selectedMonth, setSelectedMonth] = usePersistedState(
+    'finance.invoices.selectedMonth',
+    'all'
+  );
+  const [selectedWeek, setSelectedWeek] = usePersistedState('finance.invoices.selectedWeek', 'all');
+  const [selectedStatus, setSelectedStatus] = usePersistedState(
+    'finance.invoices.selectedStatus',
+    'all'
+  );
+  const [selectedClientType, setSelectedClientType] = usePersistedState(
+    'finance.invoices.selectedClientType',
+    'all'
+  );
+  const [chartType, setChartType] = usePersistedState<ChartType>(
+    'finance.invoices.chartType',
+    'bar'
+  );
+  const [chartGroupBy, setChartGroupBy] = usePersistedState<ChartGroupBy>(
+    'finance.invoices.chartGroupBy',
+    'month'
+  );
 
   const utils = trpc.useUtils();
   const { data: connection, isLoading: connectionLoading } = trpc.revenue.connection.get.useQuery();
@@ -249,27 +279,70 @@ export function InvoicesDashboard() {
       .sort((a, b) => b.value - a.value);
   }, [filteredInvoices]);
 
-  // Monthly breakdown for chart
-  const monthlyBreakdown = useMemo(() => {
+  // Period breakdown for chart (with gap filling)
+  const periodBreakdown = useMemo(() => {
     if (!filteredInvoices.length) return [];
 
-    const byMonth = new Map<string, number>();
+    const byPeriod = new Map<string, number>();
+    let minDate: Date | null = null;
+    let maxDate: Date | null = null;
 
+    // Group by period and find date range
     for (const inv of filteredInvoices) {
       if (inv.invoiceDate) {
         const date = new Date(inv.invoiceDate);
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        byMonth.set(key, (byMonth.get(key) ?? 0) + inv.revenue);
+        if (!minDate || date < minDate) minDate = date;
+        if (!maxDate || date > maxDate) maxDate = date;
+
+        let key: string;
+        if (chartGroupBy === 'month') {
+          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        } else if (chartGroupBy === 'quarter') {
+          const quarter = Math.ceil((date.getMonth() + 1) / 3);
+          key = `${date.getFullYear()}-Q${quarter}`;
+        } else {
+          key = `${date.getFullYear()}`;
+        }
+        byPeriod.set(key, (byPeriod.get(key) ?? 0) + inv.revenue);
       }
     }
 
-    return Array.from(byMonth.entries())
-      .map(([month, revenue]) => ({
-        month,
-        revenue,
-      }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-  }, [filteredInvoices]);
+    if (!minDate || !maxDate) return [];
+
+    // Generate all periods in range (fill gaps with 0)
+    const periods: { period: string; revenue: number }[] = [];
+
+    if (chartGroupBy === 'month') {
+      const current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+      const end = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
+      while (current <= end) {
+        const key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+        periods.push({ period: key, revenue: byPeriod.get(key) ?? 0 });
+        current.setMonth(current.getMonth() + 1);
+      }
+    } else if (chartGroupBy === 'quarter') {
+      const startQ = Math.ceil((minDate.getMonth() + 1) / 3);
+      const endQ = Math.ceil((maxDate.getMonth() + 1) / 3);
+      let year = minDate.getFullYear();
+      let quarter = startQ;
+      while (year < maxDate.getFullYear() || (year === maxDate.getFullYear() && quarter <= endQ)) {
+        const key = `${year}-Q${quarter}`;
+        periods.push({ period: key, revenue: byPeriod.get(key) ?? 0 });
+        quarter++;
+        if (quarter > 4) {
+          quarter = 1;
+          year++;
+        }
+      }
+    } else {
+      for (let year = minDate.getFullYear(); year <= maxDate.getFullYear(); year++) {
+        const key = `${year}`;
+        periods.push({ period: key, revenue: byPeriod.get(key) ?? 0 });
+      }
+    }
+
+    return periods;
+  }, [filteredInvoices, chartGroupBy]);
 
   const handleSync = () => {
     syncMutation.mutate();
@@ -614,38 +687,186 @@ export function InvoicesDashboard() {
       {/* Charts */}
       {!invoicesLoading && filteredInvoices.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Monthly Revenue Chart */}
-          {monthlyBreakdown.length > 1 && (
+          {/* Revenue Over Time Chart */}
+          {periodBreakdown.length > 0 && (
             <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-base">Monthly Revenue</CardTitle>
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4 space-y-0">
+                <CardTitle className="text-base">Revenue Over Time</CardTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Tabs value={chartType} onValueChange={(v) => setChartType(v as ChartType)}>
+                    <TabsList>
+                      <TabsTrigger value="bar">Bar</TabsTrigger>
+                      <TabsTrigger value="line">Line</TabsTrigger>
+                      <TabsTrigger value="area">Area</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <Tabs
+                    value={chartGroupBy}
+                    onValueChange={(v) => setChartGroupBy(v as ChartGroupBy)}
+                  >
+                    <TabsList>
+                      <TabsTrigger value="month">Month</TabsTrigger>
+                      <TabsTrigger value="quarter">Quarter</TabsTrigger>
+                      <TabsTrigger value="year">Year</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyBreakdown}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis
-                        dataKey="month"
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(value) => {
-                          const [year, month] = value.split('-');
-                          return `${monthNames[parseInt(month) - 1]?.slice(0, 3)} ${year.slice(2)}`;
-                        }}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
-                      />
-                      <Tooltip
-                        formatter={(value) => [formatCurrency(value as number), 'Revenue']}
-                        labelFormatter={(label) => {
-                          const [year, month] = String(label).split('-');
-                          return `${monthNames[parseInt(month) - 1]} ${year}`;
-                        }}
-                      />
-                      <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
+                    {chartType === 'bar' ? (
+                      <BarChart data={periodBreakdown}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis
+                          dataKey="period"
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => {
+                            if (chartGroupBy === 'month') {
+                              const [year, month] = value.split('-');
+                              return `${monthNames[parseInt(month) - 1]?.slice(0, 3)} '${year.slice(2)}`;
+                            } else if (chartGroupBy === 'quarter') {
+                              const [year, q] = value.split('-');
+                              return `${q} '${year.slice(2)}`;
+                            }
+                            return value;
+                          }}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
+                        />
+                        <Tooltip
+                          formatter={(value) => [formatCurrency(value as number), 'Revenue']}
+                          labelFormatter={(label) => {
+                            if (chartGroupBy === 'month') {
+                              const [year, month] = String(label).split('-');
+                              return `${monthNames[parseInt(month) - 1]} ${year}`;
+                            } else if (chartGroupBy === 'quarter') {
+                              const [year, q] = String(label).split('-');
+                              return `${q} ${year}`;
+                            }
+                            return label;
+                          }}
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '6px',
+                          }}
+                        />
+                        <Legend />
+                        <Bar
+                          dataKey="revenue"
+                          name="Revenue"
+                          fill="#3b82f6"
+                          radius={[4, 4, 0, 0]}
+                        />
+                      </BarChart>
+                    ) : chartType === 'line' ? (
+                      <LineChart data={periodBreakdown}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis
+                          dataKey="period"
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => {
+                            if (chartGroupBy === 'month') {
+                              const [year, month] = value.split('-');
+                              return `${monthNames[parseInt(month) - 1]?.slice(0, 3)} '${year.slice(2)}`;
+                            } else if (chartGroupBy === 'quarter') {
+                              const [year, q] = value.split('-');
+                              return `${q} '${year.slice(2)}`;
+                            }
+                            return value;
+                          }}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
+                        />
+                        <Tooltip
+                          formatter={(value) => [formatCurrency(value as number), 'Revenue']}
+                          labelFormatter={(label) => {
+                            if (chartGroupBy === 'month') {
+                              const [year, month] = String(label).split('-');
+                              return `${monthNames[parseInt(month) - 1]} ${year}`;
+                            } else if (chartGroupBy === 'quarter') {
+                              const [year, q] = String(label).split('-');
+                              return `${q} ${year}`;
+                            }
+                            return label;
+                          }}
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '6px',
+                          }}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="revenue"
+                          name="Revenue"
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          dot={{ fill: '#3b82f6', strokeWidth: 2 }}
+                        />
+                      </LineChart>
+                    ) : (
+                      <AreaChart data={periodBreakdown}>
+                        <defs>
+                          <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis
+                          dataKey="period"
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => {
+                            if (chartGroupBy === 'month') {
+                              const [year, month] = value.split('-');
+                              return `${monthNames[parseInt(month) - 1]?.slice(0, 3)} '${year.slice(2)}`;
+                            } else if (chartGroupBy === 'quarter') {
+                              const [year, q] = value.split('-');
+                              return `${q} '${year.slice(2)}`;
+                            }
+                            return value;
+                          }}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
+                        />
+                        <Tooltip
+                          formatter={(value) => [formatCurrency(value as number), 'Revenue']}
+                          labelFormatter={(label) => {
+                            if (chartGroupBy === 'month') {
+                              const [year, month] = String(label).split('-');
+                              return `${monthNames[parseInt(month) - 1]} ${year}`;
+                            } else if (chartGroupBy === 'quarter') {
+                              const [year, q] = String(label).split('-');
+                              return `${q} ${year}`;
+                            }
+                            return label;
+                          }}
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '6px',
+                          }}
+                        />
+                        <Legend />
+                        <Area
+                          type="monotone"
+                          dataKey="revenue"
+                          name="Revenue"
+                          stroke="#3b82f6"
+                          fillOpacity={1}
+                          fill="url(#colorRevenue)"
+                        />
+                      </AreaChart>
+                    )}
                   </ResponsiveContainer>
                 </div>
               </CardContent>
@@ -774,58 +995,92 @@ export function InvoicesDashboard() {
           </CardContent>
         </Card>
       ) : (
-        groupedByYear.map(([year, yearInvoices]) => (
-          <Card key={year}>
-            <CardContent className="pt-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">{year || 'No Date'}</h3>
-                <span className="text-muted-foreground text-sm">
-                  {yearInvoices.length} invoice{yearInvoices.length !== 1 ? 's' : ''} &middot;{' '}
-                  {formatCurrency(yearInvoices.reduce((sum, inv) => sum + inv.revenue, 0))}
-                </span>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Invoice #</TableHead>
-                    <TableHead>Invoice Date</TableHead>
-                    <TableHead>Client Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount (excl. VAT)</TableHead>
-                    <TableHead className="text-right">VAT</TableHead>
-                    <TableHead className="text-right">Income Tax</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {yearInvoices.map((invoice) => {
-                    const vat = invoice.revenue * VAT_RATE;
-                    return (
-                      <TableRow key={invoice.invoiceNumber}>
-                        <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                        <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
-                        <TableCell>{invoice.clientType ?? '-'}</TableCell>
-                        <TableCell>
-                          {invoice.invoiceStatus ? (
-                            <Badge variant="outline">{invoice.invoiceStatus}</Badge>
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(invoice.revenue)}
-                        </TableCell>
-                        <TableCell className="text-right">{formatCurrency(vat)}</TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(invoice.taxReservation)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        ))
+        groupedByYear.map(([year, yearInvoices]) => {
+          const yearRevenue = yearInvoices.reduce((sum, inv) => sum + inv.revenue, 0);
+          const yearVat = yearRevenue * VAT_RATE;
+          const yearIncomeTax = yearInvoices.reduce((sum, inv) => sum + inv.taxReservation, 0);
+
+          return (
+            <Card key={year}>
+              <CardContent className="pt-6">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+                  <h3 className="text-lg font-semibold">{year || 'No Date'}</h3>
+                  <div className="flex flex-wrap items-center gap-6 text-sm">
+                    <span className="text-muted-foreground">
+                      {yearInvoices.length} invoice{yearInvoices.length !== 1 ? 's' : ''}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="text-primary h-4 w-4" />
+                      <span className="font-medium">{formatCurrencyShort(yearRevenue)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Calculator className="h-4 w-4 text-blue-600" />
+                      <span className="text-muted-foreground">VAT</span>
+                      <span className="font-medium">{formatCurrencyShort(yearVat)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Users className="h-4 w-4 text-purple-600" />
+                      <span className="text-muted-foreground">Tax</span>
+                      <span className="font-medium">{formatCurrencyShort(yearIncomeTax)}</span>
+                    </div>
+                  </div>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Invoice #</TableHead>
+                      <TableHead>Invoice Date</TableHead>
+                      <TableHead>Client Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Amount (excl. VAT)</TableHead>
+                      <TableHead className="text-right">VAT</TableHead>
+                      <TableHead className="text-right">Income Tax</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {yearInvoices.map((invoice) => {
+                      const vat = invoice.revenue * VAT_RATE;
+                      return (
+                        <TableRow key={invoice.invoiceNumber}>
+                          <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                          <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
+                          <TableCell>{invoice.clientType ?? '-'}</TableCell>
+                          <TableCell>
+                            {invoice.invoiceStatus ? (
+                              <Badge
+                                variant="outline"
+                                style={{
+                                  borderColor:
+                                    STATUS_COLORS[invoice.invoiceStatus.toLowerCase()] ??
+                                    STATUS_COLORS.default,
+                                  backgroundColor: `${STATUS_COLORS[invoice.invoiceStatus.toLowerCase()] ?? STATUS_COLORS.default}20`,
+                                  color:
+                                    STATUS_COLORS[invoice.invoiceStatus.toLowerCase()] ??
+                                    STATUS_COLORS.default,
+                                }}
+                              >
+                                {invoice.invoiceStatus}
+                              </Badge>
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(invoice.revenue)}
+                          </TableCell>
+                          <TableCell className="text-right">{formatCurrency(vat)}</TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(invoice.taxReservation)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          );
+        })
       )}
     </div>
   );

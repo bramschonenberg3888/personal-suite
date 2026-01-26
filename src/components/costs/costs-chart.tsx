@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   AreaChart,
   Area,
@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { trpc } from '@/trpc/client';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 
 interface CostsChartProps {
   startDate?: Date;
@@ -37,10 +38,33 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+function formatPeriodLabel(period: string): string {
+  // Handle month format: "2024-januari" → "Jan '24"
+  const monthMatch = period.match(/^(\d{4})-(\w+)$/);
+  if (monthMatch) {
+    const [, year, month] = monthMatch;
+    const monthAbbrev = month.slice(0, 3).charAt(0).toUpperCase() + month.slice(1, 3);
+    return `${monthAbbrev} '${year.slice(2)}`;
+  }
+
+  // Handle quarter format: "2024 Q1" → "Q1 '24"
+  const quarterMatch = period.match(/^(\d{4}) Q(\d)$/);
+  if (quarterMatch) {
+    const [, year, quarter] = quarterMatch;
+    return `Q${quarter} '${year.slice(2)}`;
+  }
+
+  // Return as-is for year or unknown formats
+  return period;
+}
+
 export function CostsChart({ startDate, endDate, vatSections }: CostsChartProps) {
-  const [chartType, setChartType] = useState<ChartType>('bar');
-  const [groupBy, setGroupBy] = useState<GroupBy>('month');
-  const [showVat, setShowVat] = useState(true);
+  const [chartType, setChartType] = usePersistedState<ChartType>(
+    'finance.costs.chart.chartType',
+    'bar'
+  );
+  const [groupBy, setGroupBy] = usePersistedState<GroupBy>('finance.costs.chart.groupBy', 'month');
+  const [showVat, setShowVat] = usePersistedState('finance.costs.chart.showVat', true);
 
   const { data, isLoading } = trpc.costs.entries.byPeriod.useQuery({
     groupBy,
@@ -79,14 +103,13 @@ export function CostsChart({ startDate, endDate, vatSections }: CostsChartProps)
 
     const xAxisProps = {
       dataKey: 'period',
-      className: 'text-xs',
-      tick: { fill: 'currentColor' } as const,
+      tick: { fontSize: 12 },
+      tickFormatter: formatPeriodLabel,
     };
 
     const yAxisProps = {
+      tick: { fontSize: 12 },
       tickFormatter: (value: number) => formatCurrency(value),
-      className: 'text-xs',
-      tick: { fill: 'currentColor' } as const,
       width: 80,
     };
 

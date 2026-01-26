@@ -27,7 +27,7 @@ import { NotionSettingsDialog } from './notion-settings-dialog';
 import { KpiCards } from './kpi-cards';
 import { InteractiveMetricsChart } from './interactive-metrics-chart';
 import { ClientBreakdown } from './client-breakdown';
-import { TargetTracking } from './target-tracking';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import {
   startOfYear,
   endOfYear,
@@ -50,12 +50,21 @@ interface DateRange {
 
 export function RevenueDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>({});
-  const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [selectedClients, setSelectedClients] = usePersistedState<string[]>(
+    'finance.revenue.selectedClients',
+    []
+  );
   const [clientsOpen, setClientsOpen] = useState(false);
-  const [selectedYear, setSelectedYear] = useState<string>('all');
-  const [selectedQuarter, setSelectedQuarter] = useState<string>('all');
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  const [selectedWeek, setSelectedWeek] = useState<string>('all');
+  const [selectedYear, setSelectedYear] = usePersistedState('finance.revenue.selectedYear', 'all');
+  const [selectedQuarter, setSelectedQuarter] = usePersistedState(
+    'finance.revenue.selectedQuarter',
+    'all'
+  );
+  const [selectedMonth, setSelectedMonth] = usePersistedState(
+    'finance.revenue.selectedMonth',
+    'all'
+  );
+  const [selectedWeek, setSelectedWeek] = usePersistedState('finance.revenue.selectedWeek', 'all');
 
   const utils = trpc.useUtils();
   const { data: connection, isLoading: connectionLoading } = trpc.revenue.connection.get.useQuery();
@@ -442,18 +451,15 @@ export function RevenueDashboard() {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <KpiCards data={kpiData} isLoading={kpisLoading} />
-
-      {/* Target Tracking */}
-      <TargetTracking />
-
       {/* Charts */}
       <InteractiveMetricsChart
         startDate={effectiveDateRange.from}
         endDate={effectiveDateRange.to}
         clients={selectedClients.length > 0 ? selectedClients : undefined}
       />
+
+      {/* KPI Cards */}
+      <KpiCards data={kpiData} isLoading={kpisLoading} />
 
       {/* Client Breakdown */}
       <ClientBreakdown

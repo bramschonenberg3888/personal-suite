@@ -263,7 +263,10 @@ export const revenueRouter = createTRPCRouter({
                   : 'Unknown';
               break;
             case 'month':
-              key = entry.year && entry.month ? `${entry.year}-${entry.month}` : 'Unknown';
+              key =
+                entry.year && entry.month
+                  ? `${entry.year}-${entry.month.toLowerCase()}`
+                  : 'Unknown';
               break;
             case 'quarter':
               key = entry.year && entry.quarter ? `${entry.year} ${entry.quarter}` : 'Unknown';
