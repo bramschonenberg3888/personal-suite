@@ -5,7 +5,8 @@ import { RevenueDashboard } from '@/components/revenue/revenue-dashboard';
 import { CostsDashboard } from '@/components/costs/costs-dashboard';
 import { InvoicesDashboard } from '@/components/invoices/invoices-dashboard';
 import { TargetTracking } from '@/components/revenue/target-tracking';
-import { DollarSign, Receipt, FileText, Target } from 'lucide-react';
+import { SimplicateSettings } from '@/components/simplicate/simplicate-settings';
+import { DollarSign, Receipt, FileText, Target, Settings } from 'lucide-react';
 import { usePersistedState } from '@/hooks/use-persisted-state';
 
 export function FinanceContent() {
@@ -38,6 +39,10 @@ export function FinanceContent() {
             <Receipt className="h-4 w-4" />
             Costs
           </TabsTrigger>
+          <TabsTrigger value="settings" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Settings
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="revenue">
@@ -54,6 +59,10 @@ export function FinanceContent() {
 
         <TabsContent value="targets">
           <TargetTracking />
+        </TabsContent>
+
+        <TabsContent value="settings">
+          <SimplicateSettings />
         </TabsContent>
       </Tabs>
     </div>

@@ -47,18 +47,20 @@ model User {
   accounts      Account[]
   sessions      Session[]
   // Personal Suite relations
-  portfolioItems    PortfolioItem[]
-  drawings          Drawing[]
-  drawingFolders    DrawingFolder[]
-  libraries         ExcalidrawLibrary[]
-  trackedProducts   TrackedProduct[]
-  supermarkets      UserSupermarket[]
-  comparisonGroups  ComparisonGroup[]
-  location          UserLocation?
-  notionConnection  NotionConnection?
-  revenueEntries    RevenueEntry[]
-  costEntries       CostEntry[]
-  revenueTargets    RevenueTarget[]
+  portfolioItems       PortfolioItem[]
+  drawings             Drawing[]
+  drawingFolders       DrawingFolder[]
+  libraries            ExcalidrawLibrary[]
+  trackedProducts      TrackedProduct[]
+  supermarkets         UserSupermarket[]
+  comparisonGroups     ComparisonGroup[]
+  location             UserLocation?
+  notionConnection     NotionConnection?
+  revenueEntries       RevenueEntry[]
+  costEntries          CostEntry[]
+  revenueTargets       RevenueTarget[]
+  simplicateConnection SimplicateConnection?
+  simplicateMappings   SimplicateMapping[]
 }
 
 model VerificationToken {
@@ -246,34 +248,38 @@ model NotionConnection {
 }
 
 model RevenueEntry {
-  id             String    @id @default(cuid())
-  notionPageId   String    @unique
-  userId         String
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  description    String?
-  kilometers     Float?
-  minutes        Int?
-  hours          Float?
-  billable       Boolean   @default(true)
-  startTime      DateTime?
-  endTime        DateTime?
-  breakMinutes   Int?
-  client         String?
-  type           String?
-  rate           Float?
-  revenue        Float?
-  taxReservation Float?
-  netIncome      Float?
-  year           Int?
-  quarter        String?
-  month          String?
-  monthNumber    Int?
-  week           Int?
-  invoiceNumber  String?
-  invoiceDate    DateTime?
-  invoiceStatus  String?
-  clientType     String?
-  syncedAt       DateTime  @default(now())
+  id                 String    @id @default(cuid())
+  notionPageId       String    @unique
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description        String?
+  kilometers         Float?
+  minutes            Int?
+  hours              Float?
+  billable           Boolean   @default(true)
+  startTime          DateTime?
+  endTime            DateTime?
+  breakMinutes       Int?
+  client             String?
+  type               String?
+  rate               Float?
+  revenue            Float?
+  taxReservation     Float?
+  netIncome          Float?
+  year               Int?
+  quarter            String?
+  month              String?
+  monthNumber        Int?
+  week               Int?
+  invoiceNumber      String?
+  invoiceDate        DateTime?
+  invoiceStatus      String?
+  clientType         String?
+  syncedAt           DateTime  @default(now())
+  // Simplicate sync fields
+  simplicateHoursId  String?
+  simplicateSyncedAt DateTime?
+  simplicateStatus   String?   // 'pending', 'synced', 'failed'
 
   @@index([userId])
   @@index([userId, year])
@@ -313,4 +319,32 @@ model RevenueTarget {
 
   @@unique([userId, year])
   @@index([userId])
+}
+
+// ===== SIMPLICATE INTEGRATION =====
+model SimplicateConnection {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subdomain  String   @default("scex")
+  apiKey     String?
+  apiSecret  String?
+  employeeId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model SimplicateMapping {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notionValue  String   // e.g., client name "Acme Corp" or work type "Development"
+  simplicateId String   // e.g., project ID "project:abc123" or hourtype ID
+  mappingType  String   // 'project' | 'hourtype'
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, notionValue, mappingType])
+  @@index([userId])
+  @@index([userId, mappingType])
 }

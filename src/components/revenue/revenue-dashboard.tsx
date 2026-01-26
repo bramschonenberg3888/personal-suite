@@ -27,6 +27,7 @@ import { NotionSettingsDialog } from './notion-settings-dialog';
 import { KpiCards } from './kpi-cards';
 import { InteractiveMetricsChart } from './interactive-metrics-chart';
 import { ClientBreakdown } from './client-breakdown';
+import { TimeEntriesList } from './time-entries-list';
 import { usePersistedState } from '@/hooks/use-persisted-state';
 import {
   startOfYear,
@@ -463,6 +464,13 @@ export function RevenueDashboard() {
 
       {/* Client Breakdown */}
       <ClientBreakdown
+        startDate={effectiveDateRange.from}
+        endDate={effectiveDateRange.to}
+        clients={selectedClients.length > 0 ? selectedClients : undefined}
+      />
+
+      {/* Time Entries with Simplicate sync */}
+      <TimeEntriesList
         startDate={effectiveDateRange.from}
         endDate={effectiveDateRange.to}
         clients={selectedClients.length > 0 ? selectedClients : undefined}
