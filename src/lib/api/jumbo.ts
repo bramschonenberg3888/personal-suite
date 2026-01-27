@@ -84,7 +84,7 @@ export async function searchProducts(
 
     const products: JumboProduct[] = (data.products?.data || data.data || []).map(
       (p: any): JumboProduct => ({
-        id: p.id || String(Math.random()),
+        id: p.id || `jumbo-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         title: p.title || '',
         quantityOptions: (p.quantityOptions || []).map((opt: any) => ({
           unit: opt.unit || '',

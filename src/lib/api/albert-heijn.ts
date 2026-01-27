@@ -111,7 +111,9 @@ export async function searchProducts(
 
     const products: AHProduct[] = (data.products || []).map(
       (p: any): AHProduct => ({
-        id: String(p.webshopId || p.id || Math.random()),
+        id: String(
+          p.webshopId || p.id || `ah-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        ),
         title: p.title || '',
         salesUnitSize: p.salesUnitSize || '',
         // New API returns prices in euros, not cents

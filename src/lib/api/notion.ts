@@ -228,10 +228,19 @@ export async function validateNotionConnection(databaseId: string): Promise<{
 async function resolvePageTitles(notion: Client, pageIds: string[]): Promise<Map<string, string>> {
   const titleMap = new Map<string, string>();
 
+  // Limit total pages to prevent memory exhaustion with large datasets
+  const maxPages = 1000;
+  const limitedPageIds = pageIds.slice(0, maxPages);
+  if (pageIds.length > maxPages) {
+    console.warn(
+      `[Notion] Truncating page title resolution from ${pageIds.length} to ${maxPages} pages`
+    );
+  }
+
   // Fetch pages in parallel (batch of 10 to avoid rate limits)
   const batchSize = 10;
-  for (let i = 0; i < pageIds.length; i += batchSize) {
-    const batch = pageIds.slice(i, i + batchSize);
+  for (let i = 0; i < limitedPageIds.length; i += batchSize) {
+    const batch = limitedPageIds.slice(i, i + batchSize);
     const results = await Promise.all(
       batch.map(async (pageId) => {
         try {

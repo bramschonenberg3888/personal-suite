@@ -342,18 +342,20 @@ export const drawingRouter = createTRPCRouter({
     getPath: protectedProcedure
       .input(z.object({ folderId: z.string() }))
       .query(async ({ ctx, input }) => {
+        // Fetch all user folders in one query, then traverse in-memory
+        const allFolders = await ctx.db.drawingFolder.findMany({
+          where: { userId: ctx.userId },
+          select: { id: true, name: true, parentId: true },
+        });
+
+        const folderMap = new Map(allFolders.map((f) => [f.id, f]));
         const path: { id: string; name: string }[] = [];
         let currentId: string | null = input.folderId;
         const maxDepth = 50;
         let depth = 0;
 
         while (currentId && depth < maxDepth) {
-          const folder: { id: string; name: string; parentId: string | null } | null =
-            await ctx.db.drawingFolder.findFirst({
-              where: { id: currentId, userId: ctx.userId },
-              select: { id: true, name: true, parentId: true },
-            });
-
+          const folder = folderMap.get(currentId);
           if (!folder) break;
 
           path.unshift({ id: folder.id, name: folder.name });
@@ -439,9 +441,14 @@ export const drawingRouter = createTRPCRouter({
 
         // If moving to a parent, verify ownership and check for circular reference
         if (input.parentId) {
-          const targetParent = await ctx.db.drawingFolder.findFirst({
-            where: { id: input.parentId, userId: ctx.userId },
+          // Fetch all user folders in one query for circular reference check
+          const allFolders = await ctx.db.drawingFolder.findMany({
+            where: { userId: ctx.userId },
+            select: { id: true, parentId: true },
           });
+
+          const folderMap = new Map(allFolders.map((f) => [f.id, f]));
+          const targetParent = folderMap.get(input.parentId);
 
           if (!targetParent) {
             throw new TRPCError({ code: 'NOT_FOUND', message: 'Target folder not found' });
@@ -449,6 +456,7 @@ export const drawingRouter = createTRPCRouter({
 
           // Check for circular reference: traverse up from target to ensure we don't hit the folder being moved
           let checkId: string | null = input.parentId;
+          const visited = new Set<string>();
           while (checkId) {
             if (checkId === input.id) {
               throw new TRPCError({
@@ -456,11 +464,9 @@ export const drawingRouter = createTRPCRouter({
                 message: 'Cannot move folder into its own descendant',
               });
             }
-            const checkFolder: { parentId: string | null } | null =
-              await ctx.db.drawingFolder.findFirst({
-                where: { id: checkId, userId: ctx.userId },
-                select: { parentId: true },
-              });
+            if (visited.has(checkId)) break; // Prevent infinite loop on corrupted data
+            visited.add(checkId);
+            const checkFolder = folderMap.get(checkId);
             checkId = checkFolder?.parentId ?? null;
           }
         }

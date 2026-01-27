@@ -204,33 +204,18 @@ export const shopperRouter = createTRPCRouter({
           }
         }
 
-        const searchPromises: Promise<typeof ahResult | typeof jumboResult>[] = [];
-        let ahResult = {
-          products: [] as Awaited<ReturnType<typeof albertHeijn.searchProducts>>['products'],
-        };
-        let jumboResult = {
-          products: [] as Awaited<ReturnType<typeof jumbo.searchProducts>>['products'],
-        };
-
-        if (enabledSupermarkets.includes('Albert Heijn')) {
-          searchPromises.push(
-            albertHeijn.searchProducts(input.query, 0, 10).then((r) => {
-              ahResult = r;
-              return r;
-            })
-          );
-        }
-
-        if (enabledSupermarkets.includes('Jumbo')) {
-          searchPromises.push(
-            jumbo.searchProducts(input.query, 0, 10).then((r) => {
-              jumboResult = r;
-              return r;
-            })
-          );
-        }
-
-        await Promise.all(searchPromises);
+        const [ahResult, jumboResult] = await Promise.all([
+          enabledSupermarkets.includes('Albert Heijn')
+            ? albertHeijn.searchProducts(input.query, 0, 10)
+            : Promise.resolve({
+                products: [] as Awaited<ReturnType<typeof albertHeijn.searchProducts>>['products'],
+              }),
+          enabledSupermarkets.includes('Jumbo')
+            ? jumbo.searchProducts(input.query, 0, 10)
+            : Promise.resolve({
+                products: [] as Awaited<ReturnType<typeof jumbo.searchProducts>>['products'],
+              }),
+        ]);
 
         const products = [
           ...ahResult.products.map((p) => ({
