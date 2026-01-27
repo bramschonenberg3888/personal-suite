@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure } from '../init';
 import * as albertHeijn from '@/lib/api/albert-heijn';
 import * as jumbo from '@/lib/api/jumbo';
@@ -395,7 +396,7 @@ export const shopperRouter = createTRPCRouter({
         });
 
         if (!product) {
-          throw new Error('Product not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Product not found' });
         }
 
         return ctx.db.trackedProduct.update({
@@ -475,7 +476,7 @@ export const shopperRouter = createTRPCRouter({
         });
 
         if (!trackedProduct) {
-          throw new Error('Tracked product not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Tracked product not found' });
         }
 
         // Create the comparison group and link the product
@@ -519,7 +520,7 @@ export const shopperRouter = createTRPCRouter({
         });
 
         if (!group) {
-          throw new Error('Comparison group not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Comparison group not found' });
         }
 
         // Verify the tracked product belongs to the user
@@ -531,7 +532,7 @@ export const shopperRouter = createTRPCRouter({
         });
 
         if (!trackedProduct) {
-          throw new Error('Tracked product not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Tracked product not found' });
         }
 
         // Link the product to the group
@@ -565,7 +566,7 @@ export const shopperRouter = createTRPCRouter({
         });
 
         if (!trackedProduct) {
-          throw new Error('Tracked product not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Tracked product not found' });
         }
 
         // Remove from group
@@ -685,7 +686,7 @@ export const shopperRouter = createTRPCRouter({
         });
 
         if (!product) {
-          throw new Error('Product not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Product not found' });
         }
 
         const filteredHistory = filterByPeriod(product.priceHistory, input.period as Period);

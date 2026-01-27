@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure } from '../init';
 import { validateNotionConnection, fetchAllTimeEntries } from '@/lib/api/notion';
 import { Prisma } from '@/generated/prisma/client';
@@ -41,7 +42,10 @@ export const revenueRouter = createTRPCRouter({
     });
 
     if (!connection?.revenueDatabaseId) {
-      throw new Error('No Notion connection configured. Please set up your database ID first.');
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'No Notion connection configured. Please set up your database ID first.',
+      });
     }
 
     const entries = await fetchAllTimeEntries(connection.revenueDatabaseId);

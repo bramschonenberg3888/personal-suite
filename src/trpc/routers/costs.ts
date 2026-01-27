@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure } from '../init';
 import { validateCostsConnection, fetchAllCostEntries } from '@/lib/api/notion-costs';
 import { Prisma } from '@/generated/prisma/client';
@@ -47,7 +48,10 @@ export const costsRouter = createTRPCRouter({
     });
 
     if (!connection?.costsDatabaseId) {
-      throw new Error('No Notion costs database configured. Please set up your database ID first.');
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'No Notion costs database configured. Please set up your database ID first.',
+      });
     }
 
     const entries = await fetchAllCostEntries(connection.costsDatabaseId);

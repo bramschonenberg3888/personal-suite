@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure } from '../init';
 import { createSimplicateClient, transformToSimplicateHours } from '@/lib/api/simplicate';
 
@@ -66,7 +67,10 @@ export const simplicateRouter = createTRPCRouter({
       });
 
       if (!connection?.apiKey || !connection?.apiSecret) {
-        throw new Error('Simplicate connection not configured');
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Simplicate connection not configured',
+        });
       }
 
       const client = createSimplicateClient({
@@ -95,7 +99,10 @@ export const simplicateRouter = createTRPCRouter({
       });
 
       if (!connection?.apiKey || !connection?.apiSecret) {
-        throw new Error('Simplicate connection not configured');
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Simplicate connection not configured',
+        });
       }
 
       const client = createSimplicateClient({
@@ -124,7 +131,10 @@ export const simplicateRouter = createTRPCRouter({
       });
 
       if (!connection?.apiKey || !connection?.apiSecret) {
-        throw new Error('Simplicate connection not configured');
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Simplicate connection not configured',
+        });
       }
 
       const client = createSimplicateClient({
@@ -231,11 +241,17 @@ export const simplicateRouter = createTRPCRouter({
       });
 
       if (!connection?.apiKey || !connection?.apiSecret) {
-        throw new Error('Simplicate connection not configured');
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Simplicate connection not configured',
+        });
       }
 
       if (!connection.employeeId) {
-        throw new Error('Employee ID not configured in Simplicate settings');
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Employee ID not configured in Simplicate settings',
+        });
       }
 
       // Get mappings
@@ -263,7 +279,7 @@ export const simplicateRouter = createTRPCRouter({
       });
 
       if (entries.length === 0) {
-        throw new Error('No entries found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No entries found' });
       }
 
       // Create Simplicate client

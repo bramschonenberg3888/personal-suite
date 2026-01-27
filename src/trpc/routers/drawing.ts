@@ -36,7 +36,7 @@ export const drawingRouter = createTRPCRouter({
     });
 
     if (!drawing) {
-      throw new Error('Drawing not found');
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Drawing not found' });
     }
 
     return drawing;
@@ -122,7 +122,7 @@ export const drawingRouter = createTRPCRouter({
       });
 
       if (!drawing) {
-        throw new Error('Drawing not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Drawing not found' });
       }
 
       return ctx.db.drawing.update({
@@ -148,7 +148,7 @@ export const drawingRouter = createTRPCRouter({
       });
 
       if (!drawing) {
-        throw new Error('Drawing not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Drawing not found' });
       }
 
       return ctx.db.drawing.delete({
@@ -177,7 +177,7 @@ export const drawingRouter = createTRPCRouter({
       });
 
       if (!drawing) {
-        throw new Error('Drawing not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Drawing not found' });
       }
 
       // Upsert files
@@ -223,7 +223,7 @@ export const drawingRouter = createTRPCRouter({
         });
 
         if (!library) {
-          throw new Error('Library not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Library not found' });
         }
 
         return library;
@@ -257,7 +257,7 @@ export const drawingRouter = createTRPCRouter({
         });
 
         if (!library) {
-          throw new Error('Library not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Library not found' });
         }
 
         return ctx.db.excalidrawLibrary.update({
@@ -277,7 +277,7 @@ export const drawingRouter = createTRPCRouter({
         });
 
         if (!library) {
-          throw new Error('Library not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Library not found' });
         }
 
         return ctx.db.excalidrawLibrary.delete({

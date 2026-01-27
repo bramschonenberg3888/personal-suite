@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure, baseProcedure } from '../init';
 import {
   getQuotes,
@@ -83,19 +84,25 @@ export const portfolioRouter = createTRPCRouter({
 
     lookupIsin: baseProcedure.input(z.object({ isin: z.string() })).query(async ({ input }) => {
       if (!isValidIsin(input.isin)) {
-        throw new Error('Invalid ISIN format. Must be 2 letters + 9 alphanumeric + 1 check digit.');
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Invalid ISIN format. Must be 2 letters + 9 alphanumeric + 1 check digit.',
+        });
       }
 
       const mappings = await mapIsin(input.isin);
 
       if (mappings.length === 0) {
-        throw new Error('No securities found for this ISIN.');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'No securities found for this ISIN.' });
       }
 
       const bestMatch = getBestTicker(mappings, input.isin.toUpperCase());
 
       if (!bestMatch) {
-        throw new Error('Could not determine best ticker for ISIN.');
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Could not determine best ticker for ISIN.',
+        });
       }
 
       // Try to get quote data for currency, but don't fail if it doesn't work
