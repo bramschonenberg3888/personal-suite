@@ -13,14 +13,15 @@ src/
 │   ├── ui/                   # shadcn/ui components
 │   ├── layout/               # App shell, sidebar
 │   ├── theme/                # Theme provider (next-themes)
-│   └── [feature]/            # Feature-specific components
+│   └── [feature]/            # Feature-specific components (costs, invoices, revenue, portfolio, shopper, drawing, weather)
 ├── lib/
-│   ├── api/                  # External API clients (yahoo-finance, notion, notion-costs, open-meteo, etc.)
+│   ├── api/                  # External API clients (yahoo-finance, notion, notion-costs, open-meteo, albert-heijn, jumbo)
+│   ├── utils/                # Helper utilities
 │   ├── auth.ts               # NextAuth config
 │   └── db.ts                 # Prisma client
 ├── trpc/routers/             # tRPC procedures (one router per feature)
-├── hooks/                    # Custom React hooks
-├── types/                    # Custom TypeScript type definitions
+├── hooks/                    # Custom React hooks (use-debounce, use-persisted-state)
+├── types/                    # TypeScript type definitions
 ├── env.ts                    # Environment variable validation (t3-env)
 └── generated/prisma/         # Prisma client (auto-generated)
 
@@ -34,6 +35,7 @@ tests/                        # E2E tests (Playwright)
 - tRPC routers → `src/trpc/routers/`, one per feature
 - Components → `src/components/[feature]/`, one per file
 - API clients → `src/lib/api/`, one per external service
+- Hooks → `src/hooks/`, one per hook
 - Tests → `__tests__/` (unit) or `tests/` (E2E)
 
 ## Parallel Development
