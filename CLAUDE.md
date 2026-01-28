@@ -1,6 +1,6 @@
 # personal-suite
 
-Personal productivity and financial suite: stock portfolio watchlist (Yahoo Finance), Dutch supermarket price tracking (Albert Heijn & Jumbo), weather forecasts (Open-Meteo), Excalidraw drawing canvas, and revenue tracking (Notion integration).
+Personal productivity and financial suite: stock portfolio watchlist (Yahoo Finance), Dutch supermarket price tracking (Albert Heijn & Jumbo), weather forecasts (Open-Meteo), Excalidraw drawing canvas, revenue tracking (Notion integration), and time registration (Simplicate).
 
 ## Project Structure
 
@@ -13,9 +13,9 @@ src/
 │   ├── ui/                   # shadcn/ui components
 │   ├── layout/               # App shell, sidebar
 │   ├── theme/                # Theme provider (next-themes)
-│   └── [feature]/            # Feature-specific components (costs, invoices, revenue, portfolio, shopper, drawing, weather)
+│   └── [feature]/            # Feature-specific components (costs, invoices, revenue, portfolio, shopper, drawing, weather, simplicate)
 ├── lib/
-│   ├── api/                  # External API clients (yahoo-finance, notion, notion-costs, open-meteo, albert-heijn, jumbo)
+│   ├── api/                  # External API clients (yahoo-finance, justetf, openfigi, notion, notion-costs, open-meteo, albert-heijn, jumbo, simplicate)
 │   ├── utils/                # Helper utilities
 │   ├── auth.ts               # NextAuth config
 │   └── db.ts                 # Prisma client
@@ -40,7 +40,7 @@ tests/                        # E2E tests (Playwright)
 
 ## Parallel Development
 
-Features are isolated. Safe for parallel work: portfolio, drawing, shopper, weather, finance (revenue, invoices, costs).
+Features are isolated. Safe for parallel work: portfolio, drawing, shopper, weather, finance (revenue, invoices, costs), simplicate.
 Coordinate changes to: `src/trpc/routers/_app.ts`, `prisma/schema.prisma`, `src/components/layout/`
 
 ## Code Quality

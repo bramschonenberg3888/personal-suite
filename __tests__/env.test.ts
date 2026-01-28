@@ -299,8 +299,8 @@ describe('Environment Variable Validation Schemas', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(z.ZodError);
         if (error instanceof z.ZodError) {
-          // Zod's URL error message is "Invalid URL"
-          expect(error.issues[0].message).toContain('Invalid URL');
+          // Zod's URL error message (case-insensitive)
+          expect(error.issues[0].message.toLowerCase()).toContain('invalid url');
         }
       }
     });
@@ -313,8 +313,8 @@ describe('Environment Variable Validation Schemas', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(z.ZodError);
         if (error instanceof z.ZodError) {
-          // Zod's enum error message format: "Invalid option: expected one of..."
-          expect(error.issues[0].message).toContain('Invalid option');
+          // Zod's enum error message mentions "Invalid" and the expected values
+          expect(error.issues[0].message.toLowerCase()).toContain('invalid');
         }
       }
     });

@@ -5,6 +5,11 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   test: {
+    server: {
+      deps: {
+        inline: ['zod'],
+      },
+    },
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./__tests__/setup.ts'],
