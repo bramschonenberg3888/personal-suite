@@ -51,7 +51,10 @@ function formatCurrency(value: number): string {
 }
 
 function formatHours(value: number): string {
-  return `${value.toFixed(1)}h`;
+  const h = Math.floor(value);
+  const m = Math.round((value - h) * 60);
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 function formatPeriodLabel(period: string): string {

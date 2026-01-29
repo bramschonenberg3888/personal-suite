@@ -18,6 +18,7 @@ import { TrackedProductCard } from '@/components/shopper/tracked-product-card';
 import { SupermarketFilter } from '@/components/shopper/supermarket-filter';
 import { ComparisonGroupCard } from '@/components/shopper/comparison-group-card';
 import { AddToComparisonDialog } from '@/components/shopper/add-to-comparison-dialog';
+import { getUnitPriceForSort } from '@/lib/utils/unit-price';
 import { DashboardWidgets } from '@/components/shopper/dashboard-widgets';
 import { BestDealsWidget } from '@/components/shopper/best-deals-widget';
 import {
@@ -114,8 +115,10 @@ export default function ShopperPage() {
           }
           return a.isFavorite ? -1 : 1;
         case 'unit-price':
-          // For now, just sort by price - could be enhanced with unit price calculation
-          return a.product.currentPrice - b.product.currentPrice;
+          return (
+            getUnitPriceForSort(a.product.currentPrice, a.product.unit, a.product.name) -
+            getUnitPriceForSort(b.product.currentPrice, b.product.unit, b.product.name)
+          );
         case 'date':
         default:
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

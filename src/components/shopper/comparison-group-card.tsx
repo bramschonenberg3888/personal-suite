@@ -26,7 +26,7 @@ import {
   LayoutGrid,
   List,
 } from 'lucide-react';
-import { getUnitPriceDisplay, parseUnitString, calculateUnitPrice } from '@/lib/utils/unit-price';
+import { getUnitPriceDisplay, getGroupUnitInfo, formatUnitPrice } from '@/lib/utils/unit-price';
 
 interface ComparisonProduct {
   id: string;
@@ -87,17 +87,34 @@ export function ComparisonGroupCard({
     p.product.currentPrice < min.product.currentPrice ? p : min
   );
 
-  // Find best value (by unit price)
-  const productsWithUnitPrice = group.products.map((p) => {
-    const parsed = parseUnitString(p.product.unit);
-    const unitPrice = calculateUnitPrice(p.product.currentPrice, parsed);
-    return { ...p, unitPrice, unitType: parsed?.type };
-  });
+  // Group-level unit analysis
+  const groupUnitInfo = getGroupUnitInfo(
+    group.products.map((p) => ({
+      id: p.id,
+      price: p.product.currentPrice,
+      unit: p.product.unit,
+      name: p.product.name,
+    }))
+  );
 
-  const productsWithValidUnitPrice = productsWithUnitPrice.filter((p) => p.unitPrice !== null);
-  const bestValueProduct =
-    productsWithValidUnitPrice.length > 0
-      ? productsWithValidUnitPrice.reduce((min, p) => (p.unitPrice! < min.unitPrice! ? p : min))
+  // Build a lookup for per-product unit prices
+  const unitPriceMap = new Map(groupUnitInfo.products.map((p) => [p.id, p.unitPrice]));
+
+  // Find best value (lowest unit price) when comparison is possible
+  const bestValueProduct = groupUnitInfo.canCompare
+    ? group.products.reduce<ComparisonProduct | null>((best, p) => {
+        const up = unitPriceMap.get(p.id);
+        if (up === null || up === undefined) return best;
+        if (!best) return p;
+        const bestUp = unitPriceMap.get(best.id);
+        return bestUp !== null && bestUp !== undefined && up < bestUp ? p : best;
+      }, null)
+    : null;
+
+  // Best-value unit price for header display
+  const bestValueUnitPrice =
+    bestValueProduct && groupUnitInfo.canCompare
+      ? (unitPriceMap.get(bestValueProduct.id) ?? null)
       : null;
 
   const handleSaveName = () => {
@@ -182,10 +199,20 @@ export function ComparisonGroupCard({
             </Button>
           </div>
         </div>
-        {savings > 0 && group.products.length > 1 && (
-          <p className="text-sm text-green-600 mt-2">
-            Save {formatPrice(savings)} by choosing {cheapestProduct.product.supermarket.name}
-          </p>
+        {group.products.length > 1 && (
+          <div className="mt-2 space-y-0.5">
+            {savings > 0 && (
+              <p className="text-sm text-green-600">
+                Save {formatPrice(savings)} by choosing {cheapestProduct.product.supermarket.name}
+              </p>
+            )}
+            {groupUnitInfo.canCompare && bestValueProduct && bestValueUnitPrice !== null && (
+              <p className="text-sm text-green-600">
+                Best value: {bestValueProduct.product.supermarket.name} at{' '}
+                {formatUnitPrice(bestValueUnitPrice, groupUnitInfo.commonType)}
+              </p>
+            )}
+          </div>
         )}
       </CardHeader>
       <CardContent>
@@ -203,12 +230,23 @@ export function ComparisonGroupCard({
               const priceHistory = product.priceHistory || [];
               const previousPrice = priceHistory[1]?.price;
               const historyPriceDiff = previousPrice ? product.currentPrice - previousPrice : 0;
-              const unitPriceDisplay = getUnitPriceDisplay(product.currentPrice, product.unit);
+              const unitPriceDisplay = getUnitPriceDisplay(
+                product.currentPrice,
+                product.unit,
+                product.name
+              );
+              const unitPrice = unitPriceMap.get(tracked.id) ?? null;
+              const unitPriceFormatted =
+                groupUnitInfo.canCompare && unitPrice !== null
+                  ? formatUnitPrice(unitPrice, groupUnitInfo.commonType)
+                  : null;
+              // Highlight border for best value when unit comparison is active
+              const highlightBorder = groupUnitInfo.canCompare ? isBestValue : isCheapest;
 
               return (
                 <div
                   key={tracked.id}
-                  className={`relative rounded-lg border p-3 ${isCheapest ? 'border-green-500 bg-green-50 dark:bg-green-950/30' : ''}`}
+                  className={`relative rounded-lg border p-3 ${highlightBorder ? 'border-green-500 bg-green-50 dark:bg-green-950/30' : ''}`}
                 >
                   <Button
                     variant="ghost"
@@ -236,40 +274,76 @@ export function ComparisonGroupCard({
                       {product.supermarket.name}
                     </Badge>
 
-                    <p className="text-sm font-medium line-clamp-2 mb-1">{product.name}</p>
+                    <p className="text-sm font-medium line-clamp-2 mb-1">
+                      {product.name}
+                      {groupUnitInfo.canCompare && product.unit && (
+                        <span className="text-muted-foreground font-normal"> · {product.unit}</span>
+                      )}
+                    </p>
 
-                    {product.unit && (
+                    {!groupUnitInfo.canCompare && product.unit && (
                       <p className="text-xs text-muted-foreground mb-1">{product.unit}</p>
                     )}
 
-                    {unitPriceDisplay && (
-                      <p className="text-xs text-muted-foreground mb-2">{unitPriceDisplay}</p>
+                    {groupUnitInfo.canCompare && unitPriceFormatted ? (
+                      <>
+                        <div className="flex items-center gap-1">
+                          <span
+                            className={`text-xl font-bold ${isBestValue ? 'text-green-600 dark:text-green-400' : ''}`}
+                          >
+                            {unitPriceFormatted}
+                          </span>
+                          {historyPriceDiff !== 0 && (
+                            <span
+                              className={`flex items-center text-xs ${
+                                historyPriceDiff < 0 ? 'text-green-600' : 'text-red-600'
+                              }`}
+                            >
+                              {historyPriceDiff < 0 ? (
+                                <TrendingDown className="h-3 w-3" />
+                              ) : (
+                                <TrendingUp className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {formatPrice(product.currentPrice)} total
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        {unitPriceDisplay && (
+                          <p className="text-xs text-muted-foreground mb-2">{unitPriceDisplay}</p>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <span
+                            className={`text-xl font-bold ${isCheapest ? 'text-green-600 dark:text-green-400' : ''}`}
+                          >
+                            {formatPrice(product.currentPrice)}
+                          </span>
+                          {historyPriceDiff !== 0 && (
+                            <span
+                              className={`flex items-center text-xs ${
+                                historyPriceDiff < 0 ? 'text-green-600' : 'text-red-600'
+                              }`}
+                            >
+                              {historyPriceDiff < 0 ? (
+                                <TrendingDown className="h-3 w-3" />
+                              ) : (
+                                <TrendingUp className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </>
                     )}
 
-                    <div className="flex items-center gap-1">
-                      <span
-                        className={`text-xl font-bold ${isCheapest ? 'text-green-600 dark:text-green-400' : ''}`}
-                      >
-                        {formatPrice(product.currentPrice)}
-                      </span>
-                      {historyPriceDiff !== 0 && (
-                        <span
-                          className={`flex items-center text-xs ${
-                            historyPriceDiff < 0 ? 'text-green-600' : 'text-red-600'
-                          }`}
-                        >
-                          {historyPriceDiff < 0 ? (
-                            <TrendingDown className="h-3 w-3" />
-                          ) : (
-                            <TrendingUp className="h-3 w-3" />
-                          )}
-                        </span>
-                      )}
-                    </div>
-
                     <div className="flex flex-wrap gap-1 mt-2 justify-center">
-                      {isCheapest && <Badge className="bg-green-600">Cheapest</Badge>}
-                      {isBestValue && !isCheapest && <Badge variant="secondary">Best Value</Badge>}
+                      {isBestValue && <Badge className="bg-green-600">Best Value</Badge>}
+                      {isCheapest && !isBestValue && (
+                        <Badge className="bg-green-600">Cheapest</Badge>
+                      )}
                       {!isCheapest && priceDiff > 0 && (
                         <p className="text-xs text-muted-foreground">
                           +{formatPrice(priceDiff)} more
@@ -309,12 +383,25 @@ export function ComparisonGroupCard({
                   tracked.id === bestValueProduct.id &&
                   group.products.length > 1;
                 const priceDiff = product.currentPrice - cheapestProduct.product.currentPrice;
-                const unitPriceDisplay = getUnitPriceDisplay(product.currentPrice, product.unit);
+                const unitPriceDisplay = getUnitPriceDisplay(
+                  product.currentPrice,
+                  product.unit,
+                  product.name
+                );
+                const unitPrice = unitPriceMap.get(tracked.id) ?? null;
+                const bestUnitPrice = bestValueProduct
+                  ? (unitPriceMap.get(bestValueProduct.id) ?? null)
+                  : null;
+                const unitPriceDiff =
+                  groupUnitInfo.canCompare && unitPrice !== null && bestUnitPrice !== null
+                    ? unitPrice - bestUnitPrice
+                    : null;
+                const highlightRow = groupUnitInfo.canCompare ? isBestValue : isCheapest;
 
                 return (
                   <TableRow
                     key={tracked.id}
-                    className={isCheapest ? 'bg-green-50 dark:bg-green-950/30' : ''}
+                    className={highlightRow ? 'bg-green-50 dark:bg-green-950/30' : ''}
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -346,22 +433,38 @@ export function ComparisonGroupCard({
                       <span className={isCheapest ? 'font-bold text-green-600' : 'font-medium'}>
                         {formatPrice(product.currentPrice)}
                       </span>
-                      {isCheapest && <Badge className="ml-2 bg-green-600">Cheapest</Badge>}
+                      {isCheapest && !isBestValue && (
+                        <Badge className="ml-2 bg-green-600">Cheapest</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       {unitPriceDisplay && (
-                        <span className={isBestValue ? 'font-bold text-green-600' : ''}>
+                        <span
+                          className={
+                            groupUnitInfo.canCompare
+                              ? isBestValue
+                                ? 'font-bold text-green-600'
+                                : 'font-bold'
+                              : isBestValue
+                                ? 'font-bold text-green-600'
+                                : ''
+                          }
+                        >
                           {unitPriceDisplay}
                         </span>
                       )}
-                      {isBestValue && !isCheapest && (
-                        <Badge variant="secondary" className="ml-2">
-                          Best Value
-                        </Badge>
-                      )}
+                      {isBestValue && <Badge className="ml-2 bg-green-600">Best Value</Badge>}
                     </TableCell>
                     <TableCell className="text-right">
-                      {priceDiff > 0 ? (
+                      {groupUnitInfo.canCompare && unitPriceDiff !== null ? (
+                        unitPriceDiff > 0 ? (
+                          <span className="text-muted-foreground">
+                            +{formatUnitPrice(unitPriceDiff, groupUnitInfo.commonType)}
+                          </span>
+                        ) : unitPriceDiff === 0 ? (
+                          <span className="text-green-600">—</span>
+                        ) : null
+                      ) : priceDiff > 0 ? (
                         <span className="text-muted-foreground">+{formatPrice(priceDiff)}</span>
                       ) : priceDiff === 0 ? (
                         <span className="text-green-600">—</span>

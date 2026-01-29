@@ -94,7 +94,7 @@ export function TrackedProductCard({
     trackedProduct.targetPrice !== null && product.currentPrice <= trackedProduct.targetPrice;
 
   // Unit price calculation
-  const unitPriceDisplay = getUnitPriceDisplay(product.currentPrice, product.unit);
+  const unitPriceDisplay = getUnitPriceDisplay(product.currentPrice, product.unit, product.name);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('nl-NL', {

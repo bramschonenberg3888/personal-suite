@@ -121,7 +121,10 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
 
   const formatHours = (hours: number | null) => {
     if (!hours) return '-';
-    return `${hours.toFixed(1)}h`;
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
   };
 
   const formatCurrency = (amount: number | null) => {

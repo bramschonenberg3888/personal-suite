@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RevenueDashboard } from '@/components/revenue/revenue-dashboard';
 import { CostsDashboard } from '@/components/costs/costs-dashboard';
@@ -11,6 +12,10 @@ import { usePersistedState } from '@/hooks/use-persisted-state';
 
 export function FinanceContent() {
   const [activeTab, setActiveTab] = usePersistedState('finance.activeTab', 'revenue');
+  const [mounted, setMounted] = useState(false);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setMounted(true), []);
 
   return (
     <div className="space-y-6">
@@ -21,50 +26,54 @@ export function FinanceContent() {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="revenue" className="gap-2">
-            <DollarSign className="h-4 w-4" />
-            Revenue
-          </TabsTrigger>
-          <TabsTrigger value="targets" className="gap-2">
-            <Target className="h-4 w-4" />
-            Targets
-          </TabsTrigger>
-          <TabsTrigger value="invoices" className="gap-2">
-            <FileText className="h-4 w-4" />
-            Invoices
-          </TabsTrigger>
-          <TabsTrigger value="costs" className="gap-2">
-            <Receipt className="h-4 w-4" />
-            Costs
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-2">
-            <Settings className="h-4 w-4" />
-            Settings
-          </TabsTrigger>
-        </TabsList>
+      {!mounted ? (
+        <div className="bg-muted h-10 w-full animate-pulse rounded-lg" />
+      ) : (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="revenue" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              Revenue
+            </TabsTrigger>
+            <TabsTrigger value="targets" className="gap-2">
+              <Target className="h-4 w-4" />
+              Targets
+            </TabsTrigger>
+            <TabsTrigger value="invoices" className="gap-2">
+              <FileText className="h-4 w-4" />
+              Invoices
+            </TabsTrigger>
+            <TabsTrigger value="costs" className="gap-2">
+              <Receipt className="h-4 w-4" />
+              Costs
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-2">
+              <Settings className="h-4 w-4" />
+              Settings
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="revenue">
-          <RevenueDashboard />
-        </TabsContent>
+          <TabsContent value="revenue">
+            <RevenueDashboard />
+          </TabsContent>
 
-        <TabsContent value="invoices">
-          <InvoicesDashboard />
-        </TabsContent>
+          <TabsContent value="invoices">
+            <InvoicesDashboard />
+          </TabsContent>
 
-        <TabsContent value="costs">
-          <CostsDashboard />
-        </TabsContent>
+          <TabsContent value="costs">
+            <CostsDashboard />
+          </TabsContent>
 
-        <TabsContent value="targets">
-          <TargetTracking />
-        </TabsContent>
+          <TabsContent value="targets">
+            <TargetTracking />
+          </TabsContent>
 
-        <TabsContent value="settings">
-          <SimplicateSettings />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="settings">
+            <SimplicateSettings />
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }
