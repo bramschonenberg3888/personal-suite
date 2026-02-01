@@ -59,9 +59,7 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
   // Filter entries that can be pushed (have hours and startTime, not already synced)
   const pushableEntries = useMemo(() => {
     if (!entries) return [];
-    return entries.filter(
-      (e) => e.hours && e.startTime && !e.simplicateHoursId && e.client && e.type
-    );
+    return entries.filter((e) => e.hours && e.startTime && !e.simplicateHoursId && e.client);
   }, [entries]);
 
   // Group entries by sync status
@@ -71,7 +69,7 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
     const synced = entries.filter((e) => e.simplicateHoursId);
     const failed = entries.filter((e) => e.simplicateStatus === 'failed' && !e.simplicateHoursId);
     const incomplete = entries.filter(
-      (e) => !e.simplicateHoursId && (!e.hours || !e.startTime || !e.client || !e.type)
+      (e) => !e.simplicateHoursId && (!e.hours || !e.startTime || !e.client)
     );
     const pending = entries.filter(
       (e) =>
@@ -79,8 +77,7 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
         e.simplicateStatus !== 'failed' &&
         e.hours &&
         e.startTime &&
-        e.client &&
-        e.type
+        e.client
     );
 
     return { synced, pending, failed, incomplete };
@@ -208,6 +205,16 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
 
         <CollapsibleContent>
           <CardContent>
+            {/* Push error message */}
+            {pushMutation.error && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+                  <XCircle className="h-5 w-5" />
+                  <span>{pushMutation.error.message}</span>
+                </div>
+              </div>
+            )}
+
             {/* Push result message */}
             {pushMutation.data && (
               <div className="mb-4 rounded-lg border p-3">
@@ -287,8 +294,7 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
                   {entries.map((entry) => {
                     const isSynced = !!entry.simplicateHoursId;
                     const isFailed = entry.simplicateStatus === 'failed' && !isSynced;
-                    const isIncomplete =
-                      !entry.hours || !entry.startTime || !entry.client || !entry.type;
+                    const isIncomplete = !entry.hours || !entry.startTime || !entry.client;
                     const canPush = !isSynced && !isIncomplete;
 
                     return (

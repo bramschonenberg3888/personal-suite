@@ -39,6 +39,26 @@ interface ConnectionFormState {
   apiKey: string;
   apiSecret: string;
   employeeId: string;
+  hoursTypeId: string;
+}
+
+/** Resolves a service name by fetching services for the project */
+function ServiceName({
+  projectId,
+  serviceId,
+  isConnected,
+}: {
+  projectId: string;
+  serviceId: string;
+  isConnected: boolean;
+}) {
+  const { data: services } = trpc.simplicate.services.list.useQuery(
+    { projectId },
+    { enabled: isConnected }
+  );
+  const service = services?.find((s) => s.id === serviceId);
+  if (service) return <>{service.name}</>;
+  return <span className="text-muted-foreground">{serviceId}</span>;
 }
 
 export function SimplicateSettings() {
@@ -48,8 +68,11 @@ export function SimplicateSettings() {
   const [formEdits, setFormEdits] = useState<Partial<ConnectionFormState>>({});
 
   // Mapping state
-  const [newProjectMapping, setNewProjectMapping] = useState({ client: '', projectId: '' });
-  const [newHourTypeMapping, setNewHourTypeMapping] = useState({ type: '', hourTypeId: '' });
+  const [newProjectMapping, setNewProjectMapping] = useState({
+    client: '',
+    projectId: '',
+    serviceId: '',
+  });
 
   // Queries
   const { data: connection, isLoading: connectionLoading } =
@@ -68,6 +91,11 @@ export function SimplicateSettings() {
     { enabled: !!connection?.apiKey && !!connection?.apiSecret }
   );
 
+  const { data: services, isLoading: servicesLoading } = trpc.simplicate.services.list.useQuery(
+    { projectId: newProjectMapping.projectId },
+    { enabled: !!newProjectMapping.projectId && !!connection?.apiKey && !!connection?.apiSecret }
+  );
+
   const { data: hourTypes, isLoading: hourTypesLoading } = trpc.simplicate.hourTypes.list.useQuery(
     undefined,
     { enabled: !!connection?.apiKey && !!connection?.apiSecret }
@@ -79,10 +107,6 @@ export function SimplicateSettings() {
 
   const { data: projectMappings } = trpc.simplicate.mappings.list.useQuery({
     mappingType: 'project',
-  });
-
-  const { data: hourTypeMappings } = trpc.simplicate.mappings.list.useQuery({
-    mappingType: 'hourtype',
   });
 
   // Get available clients and types from revenue entries
@@ -102,8 +126,7 @@ export function SimplicateSettings() {
   const upsertMapping = trpc.simplicate.mappings.upsert.useMutation({
     onSuccess: () => {
       utils.simplicate.mappings.invalidate();
-      setNewProjectMapping({ client: '', projectId: '' });
-      setNewHourTypeMapping({ type: '', hourTypeId: '' });
+      setNewProjectMapping({ client: '', projectId: '', serviceId: '' });
     },
   });
 
@@ -118,6 +141,7 @@ export function SimplicateSettings() {
   const apiKey = formEdits.apiKey ?? connection?.apiKey ?? '';
   const apiSecret = formEdits.apiSecret ?? connection?.apiSecret ?? '';
   const employeeId = formEdits.employeeId ?? connection?.employeeId ?? '';
+  const hoursTypeId = formEdits.hoursTypeId ?? connection?.hoursTypeId ?? '';
 
   const hasChanges = Object.keys(formEdits).length > 0;
 
@@ -131,6 +155,7 @@ export function SimplicateSettings() {
       apiKey: apiKey || undefined,
       apiSecret: apiSecret || undefined,
       employeeId: employeeId || undefined,
+      hoursTypeId: hoursTypeId || undefined,
     });
   };
 
@@ -143,17 +168,8 @@ export function SimplicateSettings() {
       upsertMapping.mutate({
         notionValue: newProjectMapping.client,
         simplicateId: newProjectMapping.projectId,
+        simplicateServiceId: newProjectMapping.serviceId || undefined,
         mappingType: 'project',
-      });
-    }
-  };
-
-  const handleAddHourTypeMapping = () => {
-    if (newHourTypeMapping.type && newHourTypeMapping.hourTypeId) {
-      upsertMapping.mutate({
-        notionValue: newHourTypeMapping.type,
-        simplicateId: newHourTypeMapping.hourTypeId,
-        mappingType: 'hourtype',
       });
     }
   };
@@ -161,8 +177,6 @@ export function SimplicateSettings() {
   const isConnected = !!connection?.apiKey && !!connection?.apiSecret;
   const unmappedClients =
     filterOptions?.clients.filter((c) => !projectMappings?.some((m) => m.notionValue === c)) ?? [];
-  const unmappedTypes =
-    filterOptions?.types.filter((t) => !hourTypeMappings?.some((m) => m.notionValue === t)) ?? [];
 
   if (connectionLoading) {
     return (
@@ -257,6 +271,39 @@ export function SimplicateSettings() {
             </div>
           </div>
 
+          {isConnected && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Hours Type</Label>
+                {hourTypes && hourTypes.length > 0 ? (
+                  <Select
+                    value={hoursTypeId}
+                    onValueChange={(value) => handleFieldChange('hoursTypeId', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select hours type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hourTypes.map((h) => (
+                        <SelectItem key={h.id} value={h.id}>
+                          {h.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-muted-foreground text-sm">
+                    {hourTypesLoading ? 'Loading...' : 'No hour types found'}
+                  </p>
+                )}
+                <p className="text-muted-foreground text-xs">
+                  Used for all hours entries pushed to Simplicate. Kilometers are pushed separately
+                  via the mileage endpoint.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-4">
             <Button
               onClick={handleSaveConnection}
@@ -306,6 +353,13 @@ export function SimplicateSettings() {
               </div>
             )}
           </div>
+
+          {saveConnection.error && (
+            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+              <XCircle className="h-4 w-4 shrink-0" />
+              {saveConnection.error.message}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -335,7 +389,7 @@ export function SimplicateSettings() {
             )}
 
             {/* Add new mapping */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Select
                 value={newProjectMapping.client}
                 onValueChange={(value) =>
@@ -359,18 +413,39 @@ export function SimplicateSettings() {
               <Select
                 value={newProjectMapping.projectId}
                 onValueChange={(value) =>
-                  setNewProjectMapping((prev) => ({ ...prev, projectId: value }))
+                  setNewProjectMapping((prev) => ({ ...prev, projectId: value, serviceId: '' }))
                 }
                 disabled={projectsLoading}
               >
                 <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select Simplicate project" />
+                  <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
                   {projects?.map((project) => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}
                       {project.organization && ` (${project.organization})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={newProjectMapping.serviceId}
+                onValueChange={(value) =>
+                  setNewProjectMapping((prev) => ({ ...prev, serviceId: value }))
+                }
+                disabled={!newProjectMapping.projectId || servicesLoading}
+              >
+                <SelectTrigger className="w-64">
+                  <SelectValue
+                    placeholder={servicesLoading ? 'Loading services...' : 'Select service'}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {services?.map((service) => (
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -385,9 +460,20 @@ export function SimplicateSettings() {
                   upsertMapping.isPending
                 }
               >
-                <Plus className="h-4 w-4" />
+                {upsertMapping.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
               </Button>
             </div>
+
+            {upsertMapping.error && (
+              <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                <XCircle className="h-4 w-4" />
+                {upsertMapping.error.message}
+              </div>
+            )}
 
             {/* Existing mappings */}
             {projectMappings && projectMappings.length > 0 && (
@@ -396,6 +482,7 @@ export function SimplicateSettings() {
                   <TableRow>
                     <TableHead>Notion Client</TableHead>
                     <TableHead>Simplicate Project</TableHead>
+                    <TableHead>Service</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -421,129 +508,14 @@ export function SimplicateSettings() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              deleteMapping.mutate({
-                                notionValue: mapping.notionValue,
-                                mappingType: 'project',
-                              })
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Hour Type Mappings */}
-      {isConnected && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Link2 className="h-5 w-5" />
-              Work Type → Hour Type Mappings
-            </CardTitle>
-            <CardDescription>
-              Map your Notion work types to Simplicate hour types. This determines how hours are
-              categorized.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {unmappedTypes.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                <span className="text-muted-foreground text-sm">Unmapped types:</span>
-                {unmappedTypes.map((type) => (
-                  <Badge key={type} variant="outline">
-                    {type}
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            {/* Add new mapping */}
-            <div className="flex gap-2">
-              <Select
-                value={newHourTypeMapping.type}
-                onValueChange={(value) =>
-                  setNewHourTypeMapping((prev) => ({ ...prev, type: value }))
-                }
-              >
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Select work type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filterOptions?.types.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <span className="text-muted-foreground flex items-center">→</span>
-
-              <Select
-                value={newHourTypeMapping.hourTypeId}
-                onValueChange={(value) =>
-                  setNewHourTypeMapping((prev) => ({ ...prev, hourTypeId: value }))
-                }
-                disabled={hourTypesLoading}
-              >
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select Simplicate hour type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {hourTypes?.map((hourType) => (
-                    <SelectItem key={hourType.id} value={hourType.id}>
-                      {hourType.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button
-                size="icon"
-                onClick={handleAddHourTypeMapping}
-                disabled={
-                  !newHourTypeMapping.type ||
-                  !newHourTypeMapping.hourTypeId ||
-                  upsertMapping.isPending
-                }
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Existing mappings */}
-            {hourTypeMappings && hourTypeMappings.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Notion Work Type</TableHead>
-                    <TableHead>Simplicate Hour Type</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {hourTypeMappings.map((mapping) => {
-                    const hourType = hourTypes?.find((h) => h.id === mapping.simplicateId);
-                    return (
-                      <TableRow key={mapping.id}>
-                        <TableCell className="font-medium">{mapping.notionValue}</TableCell>
-                        <TableCell>
-                          {hourType ? (
-                            hourType.label
+                          {mapping.simplicateServiceId ? (
+                            <ServiceName
+                              projectId={mapping.simplicateId}
+                              serviceId={mapping.simplicateServiceId}
+                              isConnected={isConnected}
+                            />
                           ) : (
-                            <span className="text-muted-foreground">{mapping.simplicateId}</span>
+                            <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
                         <TableCell>
@@ -553,7 +525,7 @@ export function SimplicateSettings() {
                             onClick={() =>
                               deleteMapping.mutate({
                                 notionValue: mapping.notionValue,
-                                mappingType: 'hourtype',
+                                mappingType: 'project',
                               })
                             }
                           >

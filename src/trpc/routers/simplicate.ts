@@ -19,6 +19,7 @@ export const simplicateRouter = createTRPCRouter({
           apiKey: z.string().optional(),
           apiSecret: z.string().optional(),
           employeeId: z.string().optional(),
+          hoursTypeId: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -30,12 +31,14 @@ export const simplicateRouter = createTRPCRouter({
             apiKey: input.apiKey,
             apiSecret: input.apiSecret,
             employeeId: input.employeeId,
+            hoursTypeId: input.hoursTypeId,
           },
           update: {
             subdomain: input.subdomain,
             apiKey: input.apiKey,
             apiSecret: input.apiSecret,
             employeeId: input.employeeId,
+            hoursTypeId: input.hoursTypeId,
           },
         });
       }),
@@ -90,6 +93,40 @@ export const simplicateRouter = createTRPCRouter({
         status: p.project_status?.label,
       }));
     }),
+  }),
+
+  services: createTRPCRouter({
+    list: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.string().min(1),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        const connection = await ctx.db.simplicateConnection.findUnique({
+          where: { userId: ctx.userId },
+        });
+
+        if (!connection?.apiKey || !connection?.apiSecret) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Simplicate connection not configured',
+          });
+        }
+
+        const client = createSimplicateClient({
+          subdomain: connection.subdomain,
+          apiKey: connection.apiKey,
+          apiSecret: connection.apiSecret,
+        });
+
+        const services = await client.getProjectServices(input.projectId);
+
+        return services.map((s) => ({
+          id: s.id,
+          name: s.name,
+        }));
+      }),
   }),
 
   hourTypes: createTRPCRouter({
@@ -183,6 +220,7 @@ export const simplicateRouter = createTRPCRouter({
         z.object({
           notionValue: z.string().min(1),
           simplicateId: z.string().min(1),
+          simplicateServiceId: z.string().optional(),
           mappingType: z.enum(['project', 'hourtype']),
         })
       )
@@ -199,10 +237,12 @@ export const simplicateRouter = createTRPCRouter({
             userId: ctx.userId,
             notionValue: input.notionValue,
             simplicateId: input.simplicateId,
+            simplicateServiceId: input.simplicateServiceId,
             mappingType: input.mappingType,
           },
           update: {
             simplicateId: input.simplicateId,
+            simplicateServiceId: input.simplicateServiceId,
           },
         });
       }),
@@ -254,20 +294,25 @@ export const simplicateRouter = createTRPCRouter({
         });
       }
 
-      // Get mappings
+      if (!connection.hoursTypeId) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Hours type not configured in Simplicate settings',
+        });
+      }
+
+      // Get project mappings
       const mappings = await ctx.db.simplicateMapping.findMany({
-        where: { userId: ctx.userId },
+        where: { userId: ctx.userId, mappingType: 'project' },
       });
 
-      const projectMappings = new Map<string, string>();
-      const hourTypeMappings = new Map<string, string>();
+      const projectMappings = new Map<string, { projectId: string; serviceId: string | null }>();
 
       for (const mapping of mappings) {
-        if (mapping.mappingType === 'project') {
-          projectMappings.set(mapping.notionValue, mapping.simplicateId);
-        } else if (mapping.mappingType === 'hourtype') {
-          hourTypeMappings.set(mapping.notionValue, mapping.simplicateId);
-        }
+        projectMappings.set(mapping.notionValue, {
+          projectId: mapping.simplicateId,
+          serviceId: mapping.simplicateServiceId,
+        });
       }
 
       // Get entries to push
@@ -319,9 +364,9 @@ export const simplicateRouter = createTRPCRouter({
         }
 
         // Find project mapping
-        const projectId = entry.client ? projectMappings.get(entry.client) : undefined;
+        const projectMapping = entry.client ? projectMappings.get(entry.client) : undefined;
 
-        if (!projectId) {
+        if (!projectMapping) {
           results.push({
             entryId: entry.id,
             success: false,
@@ -330,20 +375,8 @@ export const simplicateRouter = createTRPCRouter({
           continue;
         }
 
-        // Find hour type mapping
-        const hourTypeId = entry.type ? hourTypeMappings.get(entry.type) : undefined;
-
-        if (!hourTypeId) {
-          results.push({
-            entryId: entry.id,
-            success: false,
-            error: `No hour type mapping found for type: ${entry.type ?? 'unknown'}`,
-          });
-          continue;
-        }
-
         try {
-          // Transform and push to Simplicate
+          // Push hours entry
           const simplicateEntry = transformToSimplicateHours(
             {
               hours: entry.hours,
@@ -353,12 +386,27 @@ export const simplicateRouter = createTRPCRouter({
             },
             {
               employeeId: connection.employeeId,
-              projectId,
-              hourTypeId,
+              projectId: projectMapping.projectId,
+              projectServiceId: projectMapping.serviceId ?? undefined,
+              hourTypeId: connection.hoursTypeId,
             }
           );
 
           const simplicateId = await client.postHours(simplicateEntry);
+
+          // Push mileage if the entry has kilometers
+          if (entry.kilometers && entry.kilometers > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await client.postMileage({
+              employee_id: connection.employeeId,
+              project_id: projectMapping.projectId,
+              projectservice_id: projectMapping.serviceId ?? undefined,
+              mileage: entry.kilometers,
+              start_date: entry.startTime.toISOString().split('T')[0],
+              note: entry.description ?? undefined,
+              related_hours_id: simplicateId,
+            });
+          }
 
           // Update entry with Simplicate ID
           await ctx.db.revenueEntry.update({

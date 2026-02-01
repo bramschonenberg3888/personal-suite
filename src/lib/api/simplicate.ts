@@ -24,6 +24,18 @@ export interface SimplicateProject {
   };
 }
 
+export interface SimplicateProjectService {
+  id: string;
+  name: string;
+  project_id: string;
+  service_number?: string;
+  start_date?: string;
+  end_date?: string;
+  status?: string;
+  invoice_method?: string;
+  track_hours?: boolean;
+}
+
 export interface SimplicateHourType {
   id: string;
   label: string;
@@ -47,6 +59,16 @@ export interface SimplicateHoursEntry {
   start_date: string; // ISO date format: YYYY-MM-DD
   note?: string;
   billable?: boolean;
+}
+
+export interface SimplicateMileageEntry {
+  employee_id: string;
+  project_id: string;
+  projectservice_id?: string;
+  mileage: number;
+  start_date: string; // ISO date format: YYYY-MM-DD
+  note?: string;
+  related_hours_id?: string;
 }
 
 export interface SimplicateHoursResponse {
@@ -156,6 +178,16 @@ class SimplicateClient {
   }
 
   /**
+   * Get services for a specific project
+   */
+  async getProjectServices(projectId: string): Promise<SimplicateProjectService[]> {
+    const response = await this.request<{ data: SimplicateProjectService[] }>(
+      `/projects/service?q[project_id]=${encodeURIComponent(projectId)}`
+    );
+    return response.data;
+  }
+
+  /**
    * Get all hour types
    */
   async getHourTypes(): Promise<SimplicateHourType[]> {
@@ -168,6 +200,17 @@ class SimplicateClient {
    */
   async postHours(entry: SimplicateHoursEntry): Promise<string> {
     const response = await this.request<SimplicateHoursResponse>('/hours/hours', {
+      method: 'POST',
+      body: JSON.stringify(entry),
+    });
+    return response.data.id;
+  }
+
+  /**
+   * Post mileage to Simplicate
+   */
+  async postMileage(entry: SimplicateMileageEntry): Promise<string> {
+    const response = await this.request<SimplicateHoursResponse>('/hours/mileage', {
       method: 'POST',
       body: JSON.stringify(entry),
     });
@@ -226,6 +269,7 @@ export function transformToSimplicateHours(
   mapping: {
     employeeId: string;
     projectId: string;
+    projectServiceId?: string;
     hourTypeId: string;
   }
 ): SimplicateHoursEntry {
@@ -236,6 +280,7 @@ export function transformToSimplicateHours(
   return {
     employee_id: mapping.employeeId,
     project_id: mapping.projectId,
+    projectservice_id: mapping.projectServiceId,
     type_id: mapping.hourTypeId,
     hours: entry.hours,
     start_date: entry.startTime.toISOString().split('T')[0],
