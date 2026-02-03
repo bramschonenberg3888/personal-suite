@@ -18,11 +18,32 @@ export const simplicateRouter = createTRPCRouter({
           subdomain: z.string().min(1),
           apiKey: z.string().optional(),
           apiSecret: z.string().optional(),
-          employeeId: z.string().optional(),
           hoursTypeId: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
+        // Auto-resolve employee ID from Simplicate
+        let employeeId: string | undefined;
+        if (input.apiKey && input.apiSecret) {
+          try {
+            const client = createSimplicateClient({
+              subdomain: input.subdomain,
+              apiKey: input.apiKey,
+              apiSecret: input.apiSecret,
+            });
+            const employees = await client.getEmployees();
+            const match = employees.find((e) => e.name === 'Bram Schonenberg');
+            employeeId = match?.id;
+          } catch {
+            // If fetching fails, keep existing employeeId
+            const existing = await ctx.db.simplicateConnection.findUnique({
+              where: { userId: ctx.userId },
+              select: { employeeId: true },
+            });
+            employeeId = existing?.employeeId ?? undefined;
+          }
+        }
+
         return ctx.db.simplicateConnection.upsert({
           where: { userId: ctx.userId },
           create: {
@@ -30,14 +51,14 @@ export const simplicateRouter = createTRPCRouter({
             subdomain: input.subdomain,
             apiKey: input.apiKey,
             apiSecret: input.apiSecret,
-            employeeId: input.employeeId,
+            employeeId,
             hoursTypeId: input.hoursTypeId,
           },
           update: {
             subdomain: input.subdomain,
             apiKey: input.apiKey,
             apiSecret: input.apiSecret,
-            employeeId: input.employeeId,
+            employeeId,
             hoursTypeId: input.hoursTypeId,
           },
         });
