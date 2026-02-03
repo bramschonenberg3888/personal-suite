@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   Upload,
   Loader2,
@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -85,6 +86,44 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
     return { synced, pending, failed, incomplete };
   }, [entries]);
 
+  // Group entries by year (newest first)
+  type Entry = NonNullable<typeof entries>[number];
+  const entriesByYear = useMemo(() => {
+    if (!entries) return new Map<number, Entry[]>();
+    const grouped = new Map<number, Entry[]>();
+    for (const entry of entries) {
+      const year = entry.year ?? (entry.startTime ? new Date(entry.startTime).getFullYear() : 0);
+      const group = grouped.get(year);
+      if (group) {
+        group.push(entry);
+      } else {
+        grouped.set(year, [entry]);
+      }
+    }
+    // Sort by year descending
+    return new Map([...grouped.entries()].sort((a, b) => b[0] - a[0]));
+  }, [entries]);
+
+  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set());
+
+  // On first render with data, collapse all years except the most recent
+  const mostRecentYear = useMemo(() => {
+    const years = [...entriesByYear.keys()];
+    return years.length > 0 ? years[0] : null;
+  }, [entriesByYear]);
+
+  const toggleYearCollapse = useCallback((year: number) => {
+    setCollapsedYears((prev) => {
+      const next = new Set(prev);
+      if (next.has(year)) {
+        next.delete(year);
+      } else {
+        next.add(year);
+      }
+      return next;
+    });
+  }, []);
+
   const isConnected = !!simplicateConnection?.apiKey && !!simplicateConnection?.apiSecret;
   const hasEmployeeId = !!simplicateConnection?.employeeId;
 
@@ -125,6 +164,21 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
     if (m === 0) return `${h}h`;
     return `${h}h ${m}m`;
   };
+
+  const getYearStatusCounts = useCallback((yearEntries: NonNullable<typeof entries>) => {
+    const synced = yearEntries.filter((e) => e.simplicateHoursId).length;
+    const failed = yearEntries.filter(
+      (e) => e.simplicateStatus === 'failed' && !e.simplicateHoursId
+    ).length;
+    const isEntryComplete = (e: (typeof yearEntries)[number]) => {
+      if (e.type === 'Kilometers') return (e.kilometers ?? 0) > 0 && !!e.startTime && !!e.client;
+      return !!e.hours && !!e.startTime && !!e.client;
+    };
+    const ready = yearEntries.filter(
+      (e) => !e.simplicateHoursId && e.simplicateStatus !== 'failed' && isEntryComplete(e)
+    ).length;
+    return { synced, ready, failed };
+  }, []);
 
   const formatCurrency = (amount: number | null) => {
     if (!amount) return '-';
@@ -255,7 +309,7 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
               </div>
             )}
 
-            {/* Entries table */}
+            {/* Entries table grouped by year */}
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -284,81 +338,136 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
                     <TableHead className="w-36">Simplicate Status</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {entries.map((entry) => {
-                    const isSynced = !!entry.simplicateHoursId;
-                    const isFailed = entry.simplicateStatus === 'failed' && !isSynced;
-                    const isIncomplete =
-                      entry.type === 'Kilometers'
-                        ? (entry.kilometers ?? 0) <= 0 || !entry.startTime || !entry.client
-                        : !entry.hours || !entry.startTime || !entry.client;
-                    const canPush = !isSynced && !isIncomplete;
+                {[...entriesByYear.entries()].map(([year, yearEntries]) => {
+                  // Most recent year expanded by default, others collapsed unless toggled
+                  const isCollapsed =
+                    year === mostRecentYear ? collapsedYears.has(year) : !collapsedYears.has(year);
+                  const colSpan = isConnected && hasEmployeeId ? 9 : 8;
+                  const statusCounts = getYearStatusCounts(yearEntries);
 
-                    return (
-                      <TableRow key={entry.id}>
-                        {isConnected && hasEmployeeId && (
-                          <TableCell>
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border"
-                              checked={selectedEntries.has(entry.id)}
-                              onChange={() => toggleEntry(entry.id)}
-                              disabled={!canPush}
-                            />
-                          </TableCell>
-                        )}
-                        <TableCell className="whitespace-nowrap">
-                          {formatDate(entry.startTime)}
-                        </TableCell>
-                        <TableCell>
-                          {entry.client ?? (
-                            <span className="text-muted-foreground italic">No client</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {entry.type ?? (
-                            <span className="text-muted-foreground italic">No type</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">{entry.description}</TableCell>
-                        <TableCell className="text-right">{formatHours(entry.hours)}</TableCell>
-                        <TableCell className="text-right">
-                          {entry.kilometers ? `${entry.kilometers} km` : '-'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(entry.revenue)}
-                        </TableCell>
-                        <TableCell>
-                          {isSynced && (
-                            <Badge
-                              variant="secondary"
-                              className="gap-1 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
-                            >
-                              <CheckCircle2 className="h-3 w-3" />
-                              Synced
-                            </Badge>
-                          )}
-                          {isFailed && (
-                            <Badge variant="destructive" className="gap-1">
-                              <XCircle className="h-3 w-3" />
-                              Failed
-                            </Badge>
-                          )}
-                          {isIncomplete && !isSynced && !isFailed && (
-                            <Badge variant="outline" className="text-muted-foreground gap-1">
-                              Incomplete
-                            </Badge>
-                          )}
-                          {canPush && !isFailed && (
-                            <Badge variant="outline" className="border-primary text-primary gap-1">
-                              Ready
-                            </Badge>
-                          )}
+                  return (
+                    <TableBody key={year}>
+                      <TableRow
+                        className="bg-muted/50 cursor-pointer hover:bg-muted"
+                        onClick={() => toggleYearCollapse(year)}
+                      >
+                        <TableCell colSpan={colSpan}>
+                          <div className="flex items-center gap-3">
+                            {isCollapsed ? (
+                              <ChevronRight className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                            <span className="font-semibold">{year === 0 ? 'Unknown' : year}</span>
+                            <span className="text-muted-foreground text-sm">
+                              {yearEntries.length} {yearEntries.length === 1 ? 'entry' : 'entries'}
+                            </span>
+                            <div className="flex gap-2">
+                              {statusCounts.synced > 0 && (
+                                <Badge variant="secondary" className="gap-1">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  {statusCounts.synced} synced
+                                </Badge>
+                              )}
+                              {statusCounts.ready > 0 && (
+                                <Badge variant="outline" className="gap-1">
+                                  {statusCounts.ready} ready
+                                </Badge>
+                              )}
+                              {statusCounts.failed > 0 && (
+                                <Badge variant="destructive" className="gap-1">
+                                  <XCircle className="h-3 w-3" />
+                                  {statusCounts.failed} failed
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
+                      {!isCollapsed &&
+                        yearEntries.map((entry) => {
+                          const isSynced = !!entry.simplicateHoursId;
+                          const isFailed = entry.simplicateStatus === 'failed' && !isSynced;
+                          const isIncomplete =
+                            entry.type === 'Kilometers'
+                              ? (entry.kilometers ?? 0) <= 0 || !entry.startTime || !entry.client
+                              : !entry.hours || !entry.startTime || !entry.client;
+                          const canPush = !isSynced && !isIncomplete;
+
+                          return (
+                            <TableRow key={entry.id}>
+                              {isConnected && hasEmployeeId && (
+                                <TableCell>
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border"
+                                    checked={selectedEntries.has(entry.id)}
+                                    onChange={() => toggleEntry(entry.id)}
+                                    disabled={!canPush}
+                                  />
+                                </TableCell>
+                              )}
+                              <TableCell className="whitespace-nowrap">
+                                {formatDate(entry.startTime)}
+                              </TableCell>
+                              <TableCell>
+                                {entry.client ?? (
+                                  <span className="text-muted-foreground italic">No client</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {entry.type ?? (
+                                  <span className="text-muted-foreground italic">No type</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="max-w-xs truncate">
+                                {entry.description}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatHours(entry.hours)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {entry.kilometers ? `${entry.kilometers} km` : '-'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(entry.revenue)}
+                              </TableCell>
+                              <TableCell>
+                                {isSynced && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="gap-1 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Synced
+                                  </Badge>
+                                )}
+                                {isFailed && (
+                                  <Badge variant="destructive" className="gap-1">
+                                    <XCircle className="h-3 w-3" />
+                                    Failed
+                                  </Badge>
+                                )}
+                                {isIncomplete && !isSynced && !isFailed && (
+                                  <Badge variant="outline" className="text-muted-foreground gap-1">
+                                    Incomplete
+                                  </Badge>
+                                )}
+                                {canPush && !isFailed && (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-primary text-primary gap-1"
+                                  >
+                                    Ready
+                                  </Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TableBody>
+                  );
+                })}
               </Table>
             </div>
           </CardContent>
