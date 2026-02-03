@@ -7,11 +7,18 @@ import { CostsDashboard } from '@/components/costs/costs-dashboard';
 import { InvoicesDashboard } from '@/components/invoices/invoices-dashboard';
 import { TargetTracking } from '@/components/revenue/target-tracking';
 import { SimplicateSettings } from '@/components/simplicate/simplicate-settings';
-import { DollarSign, Receipt, FileText, Target, Settings } from 'lucide-react';
+import { NotionRevenueSettings } from '@/components/revenue/notion-settings-dialog';
+import { NotionCostsSettings } from '@/components/costs/costs-settings-dialog';
+import { TimeEntriesList } from '@/components/revenue/time-entries-list';
+import { DollarSign, Receipt, Settings } from 'lucide-react';
 import { usePersistedState } from '@/hooks/use-persisted-state';
 
 export function FinanceContent() {
   const [activeTab, setActiveTab] = usePersistedState('finance.activeTab', 'revenue');
+  const [activeSubTab, setActiveSubTab] = usePersistedState(
+    'finance.revenue.activeSubTab',
+    'dashboard'
+  );
   const [mounted, setMounted] = useState(false);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -35,14 +42,6 @@ export function FinanceContent() {
               <DollarSign className="h-4 w-4" />
               Revenue
             </TabsTrigger>
-            <TabsTrigger value="targets" className="gap-2">
-              <Target className="h-4 w-4" />
-              Targets
-            </TabsTrigger>
-            <TabsTrigger value="invoices" className="gap-2">
-              <FileText className="h-4 w-4" />
-              Invoices
-            </TabsTrigger>
             <TabsTrigger value="costs" className="gap-2">
               <Receipt className="h-4 w-4" />
               Costs
@@ -54,23 +53,42 @@ export function FinanceContent() {
           </TabsList>
 
           <TabsContent value="revenue">
-            <RevenueDashboard />
-          </TabsContent>
+            <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="space-y-6">
+              <TabsList>
+                <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+                <TabsTrigger value="targets">Targets</TabsTrigger>
+                <TabsTrigger value="invoices">Invoices</TabsTrigger>
+                <TabsTrigger value="simplicate">Simplicate Sync</TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="invoices">
-            <InvoicesDashboard />
+              <TabsContent value="dashboard">
+                <RevenueDashboard />
+              </TabsContent>
+
+              <TabsContent value="targets">
+                <TargetTracking />
+              </TabsContent>
+
+              <TabsContent value="invoices">
+                <InvoicesDashboard />
+              </TabsContent>
+
+              <TabsContent value="simplicate">
+                <TimeEntriesList />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="costs">
             <CostsDashboard />
           </TabsContent>
 
-          <TabsContent value="targets">
-            <TargetTracking />
-          </TabsContent>
-
           <TabsContent value="settings">
-            <SimplicateSettings />
+            <div className="space-y-6">
+              <NotionRevenueSettings />
+              <NotionCostsSettings />
+              <SimplicateSettings />
+            </div>
           </TabsContent>
         </Tabs>
       )}

@@ -56,10 +56,15 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
     },
   });
 
-  // Filter entries that can be pushed (have hours and startTime, not already synced)
+  // Filter entries that can be pushed (complete and not already synced)
   const pushableEntries = useMemo(() => {
     if (!entries) return [];
-    return entries.filter((e) => e.hours && e.startTime && !e.simplicateHoursId && e.client);
+    return entries.filter((e) => {
+      if (e.simplicateHoursId) return false;
+      if (!e.startTime || !e.client) return false;
+      if (e.type === 'Kilometers') return (e.kilometers ?? 0) > 0;
+      return !!e.hours;
+    });
   }, [entries]);
 
   // Group entries by sync status
@@ -68,16 +73,13 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
 
     const synced = entries.filter((e) => e.simplicateHoursId);
     const failed = entries.filter((e) => e.simplicateStatus === 'failed' && !e.simplicateHoursId);
-    const incomplete = entries.filter(
-      (e) => !e.simplicateHoursId && (!e.hours || !e.startTime || !e.client)
-    );
+    const isEntryComplete = (e: (typeof entries)[number]) => {
+      if (e.type === 'Kilometers') return (e.kilometers ?? 0) > 0 && !!e.startTime && !!e.client;
+      return !!e.hours && !!e.startTime && !!e.client;
+    };
+    const incomplete = entries.filter((e) => !e.simplicateHoursId && !isEntryComplete(e));
     const pending = entries.filter(
-      (e) =>
-        !e.simplicateHoursId &&
-        e.simplicateStatus !== 'failed' &&
-        e.hours &&
-        e.startTime &&
-        e.client
+      (e) => !e.simplicateHoursId && e.simplicateStatus !== 'failed' && isEntryComplete(e)
     );
 
     return { synced, pending, failed, incomplete };
@@ -253,15 +255,6 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
               </div>
             )}
 
-            {isConnected && !hasEmployeeId && (
-              <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-900 dark:bg-yellow-950">
-                <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
-                  <AlertTriangle className="h-5 w-5" />
-                  <span>Set your Employee ID in the Settings tab before pushing time entries.</span>
-                </div>
-              </div>
-            )}
-
             {/* Entries table */}
             <div className="rounded-md border">
               <Table>
@@ -286,19 +279,23 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
                     <TableHead>Type</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Hours</TableHead>
+                    <TableHead className="text-right">Km</TableHead>
                     <TableHead className="text-right">Revenue</TableHead>
-                    <TableHead className="w-24">Status</TableHead>
+                    <TableHead className="w-36">Simplicate Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {entries.map((entry) => {
                     const isSynced = !!entry.simplicateHoursId;
                     const isFailed = entry.simplicateStatus === 'failed' && !isSynced;
-                    const isIncomplete = !entry.hours || !entry.startTime || !entry.client;
+                    const isIncomplete =
+                      entry.type === 'Kilometers'
+                        ? (entry.kilometers ?? 0) <= 0 || !entry.startTime || !entry.client
+                        : !entry.hours || !entry.startTime || !entry.client;
                     const canPush = !isSynced && !isIncomplete;
 
                     return (
-                      <TableRow key={entry.id} className={isSynced ? 'opacity-60' : undefined}>
+                      <TableRow key={entry.id}>
                         {isConnected && hasEmployeeId && (
                           <TableCell>
                             <input
@@ -326,11 +323,17 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
                         <TableCell className="max-w-xs truncate">{entry.description}</TableCell>
                         <TableCell className="text-right">{formatHours(entry.hours)}</TableCell>
                         <TableCell className="text-right">
+                          {entry.kilometers ? `${entry.kilometers} km` : '-'}
+                        </TableCell>
+                        <TableCell className="text-right">
                           {formatCurrency(entry.revenue)}
                         </TableCell>
                         <TableCell>
                           {isSynced && (
-                            <Badge variant="secondary" className="gap-1">
+                            <Badge
+                              variant="secondary"
+                              className="gap-1 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
+                            >
                               <CheckCircle2 className="h-3 w-3" />
                               Synced
                             </Badge>
@@ -347,7 +350,7 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
                             </Badge>
                           )}
                           {canPush && !isFailed && (
-                            <Badge variant="outline" className="gap-1">
+                            <Badge variant="outline" className="border-primary text-primary gap-1">
                               Ready
                             </Badge>
                           )}

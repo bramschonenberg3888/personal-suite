@@ -23,11 +23,9 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/trpc/client';
-import { NotionSettingsDialog } from './notion-settings-dialog';
 import { KpiCards } from './kpi-cards';
 import { InteractiveMetricsChart } from './interactive-metrics-chart';
 import { ClientBreakdown } from './client-breakdown';
-import { TimeEntriesList } from './time-entries-list';
 import { usePersistedState } from '@/hooks/use-persisted-state';
 import {
   startOfYear,
@@ -229,18 +227,8 @@ export function RevenueDashboard() {
         </div>
         <h2 className="mt-4 text-xl font-semibold">Connect Your Notion Database</h2>
         <p className="text-muted-foreground mt-2 max-w-sm text-center">
-          To get started, connect your Notion time tracking database to sync your revenue data.
+          To get started, connect your Notion time tracking database in the Settings tab.
         </p>
-        <div className="mt-6">
-          <NotionSettingsDialog
-            trigger={
-              <Button size="lg">
-                <Database className="mr-2 h-4 w-4" />
-                Connect Notion
-              </Button>
-            }
-          />
-        </div>
       </div>
     );
   }
@@ -262,7 +250,6 @@ export function RevenueDashboard() {
           )}
         </div>
         <div className="flex gap-2">
-          <NotionSettingsDialog />
           <Button onClick={handleSync} disabled={syncMutation.isPending}>
             {syncMutation.isPending ? (
               <>
@@ -464,13 +451,6 @@ export function RevenueDashboard() {
 
       {/* Client Breakdown */}
       <ClientBreakdown
-        startDate={effectiveDateRange.from}
-        endDate={effectiveDateRange.to}
-        clients={selectedClients.length > 0 ? selectedClients : undefined}
-      />
-
-      {/* Time Entries with Simplicate sync */}
-      <TimeEntriesList
         startDate={effectiveDateRange.from}
         endDate={effectiveDateRange.to}
         clients={selectedClients.length > 0 ? selectedClients : undefined}

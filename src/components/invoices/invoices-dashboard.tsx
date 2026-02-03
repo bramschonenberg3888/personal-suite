@@ -51,7 +51,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { trpc } from '@/trpc/client';
-import { NotionSettingsDialog } from '@/components/revenue/notion-settings-dialog';
 import { getWeek } from 'date-fns';
 import { usePersistedState } from '@/hooks/use-persisted-state';
 
@@ -414,18 +413,8 @@ export function InvoicesDashboard() {
         </div>
         <h2 className="mt-4 text-xl font-semibold">Connect Your Notion Database</h2>
         <p className="text-muted-foreground mt-2 max-w-sm text-center">
-          To view invoices, connect your Notion time tracking database first via the Revenue tab.
+          To view invoices, connect your Notion time tracking database in the Settings tab.
         </p>
-        <div className="mt-6">
-          <NotionSettingsDialog
-            trigger={
-              <Button size="lg">
-                <Database className="mr-2 h-4 w-4" />
-                Connect Notion
-              </Button>
-            }
-          />
-        </div>
       </div>
     );
   }

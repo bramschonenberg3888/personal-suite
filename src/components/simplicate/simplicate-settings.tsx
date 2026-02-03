@@ -1,16 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  Settings,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  RefreshCw,
-  Plus,
-  Trash2,
-  Link2,
-} from 'lucide-react';
+import { Settings, CheckCircle2, XCircle, Loader2, Plus, Trash2, Link2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,7 +29,6 @@ interface ConnectionFormState {
   subdomain: string;
   apiKey: string;
   apiSecret: string;
-  employeeId: string;
   hoursTypeId: string;
 }
 
@@ -101,10 +91,6 @@ export function SimplicateSettings() {
     { enabled: !!connection?.apiKey && !!connection?.apiSecret }
   );
 
-  const { data: employees } = trpc.simplicate.employees.list.useQuery(undefined, {
-    enabled: !!connection?.apiKey && !!connection?.apiSecret,
-  });
-
   const { data: projectMappings } = trpc.simplicate.mappings.list.useQuery({
     mappingType: 'project',
   });
@@ -140,7 +126,6 @@ export function SimplicateSettings() {
   const subdomain = formEdits.subdomain ?? connection?.subdomain ?? 'scex';
   const apiKey = formEdits.apiKey ?? connection?.apiKey ?? '';
   const apiSecret = formEdits.apiSecret ?? connection?.apiSecret ?? '';
-  const employeeId = formEdits.employeeId ?? connection?.employeeId ?? '';
   const hoursTypeId = formEdits.hoursTypeId ?? connection?.hoursTypeId ?? '';
 
   const hasChanges = Object.keys(formEdits).length > 0;
@@ -154,7 +139,6 @@ export function SimplicateSettings() {
       subdomain,
       apiKey: apiKey || undefined,
       apiSecret: apiSecret || undefined,
-      employeeId: employeeId || undefined,
       hoursTypeId: hoursTypeId || undefined,
     });
   };
@@ -187,196 +171,160 @@ export function SimplicateSettings() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Connection Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Connection Settings
-          </CardTitle>
-          <CardDescription>
-            Configure your Simplicate API credentials. Get your API key and secret from Simplicate
-            Settings → API.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Settings className="h-5 w-5" />
+          Simplicate Connection
+        </CardTitle>
+        <CardDescription>
+          Configure your Simplicate API credentials. Get your API key and secret from Simplicate
+          Settings → API.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="subdomain">Subdomain</Label>
+          <Input
+            id="subdomain"
+            value={subdomain}
+            onChange={(e) => handleFieldChange('subdomain', e.target.value)}
+            placeholder="your-company"
+          />
+          <p className="text-muted-foreground text-xs">
+            From: https://<strong>{subdomain}</strong>.simplicate.nl
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="apiKey">API Key</Label>
+            <Input
+              id="apiKey"
+              type="password"
+              value={apiKey}
+              onChange={(e) => handleFieldChange('apiKey', e.target.value)}
+              placeholder="Enter API key"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="apiSecret">API Secret</Label>
+            <Input
+              id="apiSecret"
+              type="password"
+              value={apiSecret}
+              onChange={(e) => handleFieldChange('apiSecret', e.target.value)}
+              placeholder="Enter API secret"
+            />
+          </div>
+        </div>
+
+        {isConnected && (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="subdomain">Subdomain</Label>
-              <Input
-                id="subdomain"
-                value={subdomain}
-                onChange={(e) => handleFieldChange('subdomain', e.target.value)}
-                placeholder="your-company"
-              />
-              <p className="text-muted-foreground text-xs">
-                From: https://<strong>{subdomain}</strong>.simplicate.nl
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="employeeId">Employee ID</Label>
-              {employees && employees.length > 0 ? (
+              <Label>Hours Type</Label>
+              {hourTypes && hourTypes.length > 0 ? (
                 <Select
-                  value={employeeId}
-                  onValueChange={(value) => handleFieldChange('employeeId', value)}
+                  value={hoursTypeId}
+                  onValueChange={(value) => handleFieldChange('hoursTypeId', value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select your employee" />
+                    <SelectValue placeholder="Select hours type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {employees.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.name} {e.function && `(${e.function})`}
+                    {hourTypes.map((h) => (
+                      <SelectItem key={h.id} value={h.id}>
+                        {h.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               ) : (
-                <Input
-                  id="employeeId"
-                  value={employeeId}
-                  onChange={(e) => handleFieldChange('employeeId', e.target.value)}
-                  placeholder="employee:abc123"
-                />
+                <p className="text-muted-foreground text-sm">
+                  {hourTypesLoading ? 'Loading...' : 'No hour types found'}
+                </p>
               )}
               <p className="text-muted-foreground text-xs">
-                Your employee ID in Simplicate (required for posting hours)
+                Used for all hours entries pushed to Simplicate. Kilometers are pushed separately
+                via the mileage endpoint.
               </p>
             </div>
           </div>
+        )}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="apiKey">API Key</Label>
-              <Input
-                id="apiKey"
-                type="password"
-                value={apiKey}
-                onChange={(e) => handleFieldChange('apiKey', e.target.value)}
-                placeholder="Enter API key"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="apiSecret">API Secret</Label>
-              <Input
-                id="apiSecret"
-                type="password"
-                value={apiSecret}
-                onChange={(e) => handleFieldChange('apiSecret', e.target.value)}
-                placeholder="Enter API secret"
-              />
-            </div>
-          </div>
-
-          {isConnected && (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Hours Type</Label>
-                {hourTypes && hourTypes.length > 0 ? (
-                  <Select
-                    value={hoursTypeId}
-                    onValueChange={(value) => handleFieldChange('hoursTypeId', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select hours type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {hourTypes.map((h) => (
-                        <SelectItem key={h.id} value={h.id}>
-                          {h.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <p className="text-muted-foreground text-sm">
-                    {hourTypesLoading ? 'Loading...' : 'No hour types found'}
-                  </p>
-                )}
-                <p className="text-muted-foreground text-xs">
-                  Used for all hours entries pushed to Simplicate. Kilometers are pushed separately
-                  via the mileage endpoint.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center gap-4">
-            <Button
-              onClick={handleSaveConnection}
-              disabled={saveConnection.isPending || !hasChanges}
-            >
-              {saveConnection.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Connection'
-              )}
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={handleTestConnection}
-              disabled={testingConnection || !apiKey || !apiSecret}
-            >
-              {testingConnection ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Testing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Test Connection
-                </>
-              )}
-            </Button>
-
-            {connectionTest && (
-              <div className="flex items-center gap-2">
-                {connectionTest.success ? (
-                  <>
-                    <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    <span className="text-sm text-green-600">Connected</span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="h-5 w-5 text-red-500" />
-                    <span className="text-sm text-red-600">{connectionTest.error}</span>
-                  </>
-                )}
-              </div>
+        {connectionTest && (
+          <div
+            className={`flex items-start gap-2 rounded-md p-3 text-sm ${
+              connectionTest.success
+                ? 'bg-green-500/10 text-green-600'
+                : 'bg-red-500/10 text-red-600'
+            }`}
+          >
+            {connectionTest.success ? (
+              <>
+                <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <p className="font-medium">Connection successful!</p>
+              </>
+            ) : (
+              <>
+                <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">Connection failed</p>
+                  <p className="mt-1 text-xs opacity-80">{connectionTest.error}</p>
+                </div>
+              </>
             )}
           </div>
+        )}
 
-          {saveConnection.error && (
-            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-              <XCircle className="h-4 w-4 shrink-0" />
-              {saveConnection.error.message}
+        {saveConnection.error && (
+          <div className="flex items-start gap-2 rounded-md bg-red-500/10 p-3 text-sm text-red-600">
+            <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            {saveConnection.error.message}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleTestConnection}
+            disabled={testingConnection || !apiKey || !apiSecret}
+          >
+            {testingConnection ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Testing...
+              </>
+            ) : (
+              'Test Connection'
+            )}
+          </Button>
+          <Button onClick={handleSaveConnection} disabled={saveConnection.isPending || !hasChanges}>
+            {saveConnection.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save'
+            )}
+          </Button>
+        </div>
+
+        {/* Project Mappings */}
+        {isConnected && (
+          <>
+            <div className="border-t pt-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <Link2 className="h-4 w-4" />
+                Client → Project Mappings
+              </h3>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Map your Notion clients to Simplicate projects. Hours will be posted to the mapped
+                project.
+              </p>
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Project Mappings */}
-      {isConnected && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Link2 className="h-5 w-5" />
-              Client → Project Mappings
-            </CardTitle>
-            <CardDescription>
-              Map your Notion clients to Simplicate projects. Hours will be posted to the mapped
-              project.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
             {unmappedClients.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 <span className="text-muted-foreground text-sm">Unmapped clients:</span>
@@ -538,22 +486,9 @@ export function SimplicateSettings() {
                 </TableBody>
               </Table>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Not connected message */}
-      {!isConnected && !connectionLoading && (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <Settings className="text-muted-foreground mx-auto h-12 w-12" />
-            <h3 className="mt-4 text-lg font-semibold">Connect to Simplicate</h3>
-            <p className="text-muted-foreground mt-2">
-              Enter your API credentials above to configure mappings and push hours to Simplicate.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

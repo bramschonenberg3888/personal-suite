@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/trpc/client';
-import { CostsSettingsDialog } from './costs-settings-dialog';
 import { CostsKpiCards } from './costs-kpi-cards';
 import { CostsChart } from './costs-chart';
 import { CostsSectionBreakdown } from './costs-section-breakdown';
@@ -84,18 +83,8 @@ export function CostsDashboard() {
         </div>
         <h2 className="mt-4 text-xl font-semibold">Connect Your Notion Costs Database</h2>
         <p className="text-muted-foreground mt-2 max-w-sm text-center">
-          To get started, connect your Notion costs database to sync your expense data.
+          To get started, connect your Notion costs database in the Settings tab.
         </p>
-        <div className="mt-6">
-          <CostsSettingsDialog
-            trigger={
-              <Button size="lg">
-                <Database className="mr-2 h-4 w-4" />
-                Connect Notion
-              </Button>
-            }
-          />
-        </div>
       </div>
     );
   }
@@ -117,7 +106,6 @@ export function CostsDashboard() {
           )}
         </div>
         <div className="flex gap-2">
-          <CostsSettingsDialog />
           <Button onClick={handleSync} disabled={syncMutation.isPending}>
             {syncMutation.isPending ? (
               <>
