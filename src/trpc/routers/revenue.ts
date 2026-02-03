@@ -607,8 +607,16 @@ export const revenueRouter = createTRPCRouter({
         const elapsedMonths = isCurrentYear ? currentMonth : 12;
         const remainingMonths = isCurrentYear ? 12 - currentMonth : 0;
 
-        // Expected revenue at this point (linear distribution)
-        const expectedRevenue = (target.targetValue / totalMonths) * elapsedMonths;
+        // Fractional month calculation for accurate pacing
+        const daysInCurrentMonth = new Date(currentYear, currentMonth, 0).getDate();
+        const currentDayOfMonth = now.getDate();
+        const fractionalCurrentMonth = currentDayOfMonth / daysInCurrentMonth;
+        const fractionalElapsedMonths = isCurrentYear
+          ? currentMonth - 1 + fractionalCurrentMonth
+          : 12;
+
+        // Expected revenue at this point (linear distribution, fractional)
+        const expectedRevenue = (target.targetValue / totalMonths) * fractionalElapsedMonths;
         const paceVariance = totalRevenue - expectedRevenue;
         const isOnPace = paceVariance >= 0;
 
@@ -618,8 +626,9 @@ export const revenueRouter = createTRPCRouter({
         // Original monthly target (static)
         const originalMonthlyTarget = target.targetValue / totalMonths;
 
-        // Projected year-end revenue based on current pace
-        const monthlyAverageActual = elapsedMonths > 0 ? totalRevenue / elapsedMonths : 0;
+        // Projected year-end revenue based on current pace (fractional)
+        const monthlyAverageActual =
+          fractionalElapsedMonths > 0 ? totalRevenue / fractionalElapsedMonths : 0;
         const projectedYearEnd = monthlyAverageActual * totalMonths;
 
         // Monthly breakdown with targets vs actuals
@@ -713,6 +722,26 @@ export const revenueRouter = createTRPCRouter({
         const weeksRemaining = Math.ceil(daysRemaining / 7);
         const weeklyRequired = weeksRemaining > 0 ? remainingTarget / weeksRemaining : 0;
 
+        // Current month focus (only meaningful for current year)
+        const currentMonthRevenue = monthlyRevenue.get(currentMonth) ?? 0;
+        const cumulativeTargetThroughMonth = originalMonthlyTarget * currentMonth;
+        const neededThisMonth = Math.max(0, cumulativeTargetThroughMonth - totalRevenue);
+        const daysRemainingInMonth = daysInCurrentMonth - currentDayOfMonth;
+        const monthNames = [
+          'January',
+          'February',
+          'March',
+          'April',
+          'May',
+          'June',
+          'July',
+          'August',
+          'September',
+          'October',
+          'November',
+          'December',
+        ];
+
         return {
           target: target.targetValue,
           notes: target.notes,
@@ -726,6 +755,7 @@ export const revenueRouter = createTRPCRouter({
           // Time context
           isCurrentYear,
           elapsedMonths,
+          fractionalElapsedMonths,
           remainingMonths,
           daysRemaining,
 
@@ -757,6 +787,23 @@ export const revenueRouter = createTRPCRouter({
           bestMonth: bestMonth ? { month: bestMonth.monthName, revenue: bestMonth.actual } : null,
           worstMonth: worstMonth
             ? { month: worstMonth.monthName, revenue: worstMonth.actual }
+            : null,
+
+          // Current month focus
+          currentMonthFocus: isCurrentYear
+            ? {
+                monthName: monthNames[currentMonth - 1],
+                monthNumber: currentMonth,
+                revenueThisMonth: currentMonthRevenue,
+                monthlyTarget: originalMonthlyTarget,
+                cumulativeTargetThroughMonth,
+                cumulativeActualRevenue: totalRevenue,
+                neededThisMonth,
+                daysElapsedInMonth: currentDayOfMonth,
+                daysRemainingInMonth,
+                daysInMonth: daysInCurrentMonth,
+                monthProgressPercent: (currentDayOfMonth / daysInCurrentMonth) * 100,
+              }
             : null,
         };
       }),

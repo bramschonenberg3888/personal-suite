@@ -3,6 +3,8 @@
 import {
   BarChart,
   Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -16,11 +18,15 @@ import {
   Target,
   TrendingUp,
   TrendingDown,
+  BarChart3,
   Calendar,
+  CalendarDays,
   Clock,
+  Layers,
   Zap,
   Award,
   AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -43,18 +49,6 @@ function formatCurrency(value: number): string {
     currency: 'EUR',
     maximumFractionDigits: 0,
   }).format(value);
-}
-
-function formatCurrencyCompact(value: number): string {
-  if (value >= 1000) {
-    return new Intl.NumberFormat('nl-NL', {
-      style: 'currency',
-      currency: 'EUR',
-      maximumFractionDigits: 0,
-      notation: 'compact',
-    }).format(value);
-  }
-  return formatCurrency(value);
 }
 
 export function TargetTracking() {
@@ -140,7 +134,7 @@ export function TargetTracking() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
               <Target className="h-5 w-5" />
               Revenue Goals {selectedYear}
             </CardTitle>
@@ -168,87 +162,206 @@ export function TargetTracking() {
             <p className="text-muted-foreground mt-1 text-sm">{analytics.notes}</p>
           )}
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Main Progress */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-3xl font-bold">{formatCurrency(analytics.totalRevenue)}</p>
-                <p className="text-muted-foreground text-sm">
-                  of {formatCurrency(analytics.target)} target
-                </p>
+        <CardContent>
+          <div className="grid items-start gap-6 md:grid-cols-[3fr_1fr]">
+            {/* Left: Progress overview */}
+            <div className="space-y-4">
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-3xl font-bold">{formatCurrency(analytics.totalRevenue)}</p>
+                  <p className="text-muted-foreground text-sm">
+                    of {formatCurrency(analytics.target)} target
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold">{analytics.progressPercent.toFixed(1)}%</p>
+                  <Badge variant={analytics.isOnPace ? 'default' : 'secondary'}>
+                    {analytics.isOnPace ? (
+                      <>
+                        <TrendingUp className="mr-1 h-3 w-3" />
+                        On Pace
+                      </>
+                    ) : (
+                      <>
+                        <TrendingDown className="mr-1 h-3 w-3" />
+                        Behind Pace
+                      </>
+                    )}
+                  </Badge>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold">{analytics.progressPercent.toFixed(1)}%</p>
-                <Badge variant={analytics.isOnPace ? 'default' : 'secondary'}>
-                  {analytics.isOnPace ? (
-                    <>
-                      <TrendingUp className="mr-1 h-3 w-3" />
-                      On Pace
-                    </>
-                  ) : (
-                    <>
-                      <TrendingDown className="mr-1 h-3 w-3" />
-                      Behind Pace
-                    </>
-                  )}
-                </Badge>
-              </div>
-            </div>
-            <Progress value={Math.min(analytics.progressPercent, 100)} className="h-4" />
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">
-                {formatCurrency(analytics.remainingTarget)} remaining
-              </span>
-              {analytics.isCurrentYear && (
+              <Progress value={Math.min(analytics.progressPercent, 100)} className="h-3" />
+              <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {analytics.remainingMonths} months left
+                  {formatCurrency(analytics.remainingTarget)} remaining
                 </span>
-              )}
-            </div>
-          </div>
-
-          {/* Pacing Indicator */}
-          {analytics.isCurrentYear && (
-            <div
-              className={`flex items-center gap-3 rounded-lg border p-4 ${analytics.isOnPace ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950' : 'border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950'}`}
-            >
-              {analytics.isOnPace ? (
-                <TrendingUp className="h-8 w-8 text-green-600 dark:text-green-400" />
-              ) : (
-                <AlertTriangle className="h-8 w-8 text-orange-600 dark:text-orange-400" />
-              )}
-              <div>
-                <p className="font-medium">
-                  {analytics.isOnPace ? 'Ahead of schedule!' : 'Behind schedule'}
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  Expected: {formatCurrency(analytics.expectedRevenue)} | Actual:{' '}
-                  {formatCurrency(analytics.totalRevenue)} |{' '}
-                  {analytics.paceVariance >= 0 ? '+' : ''}
-                  {formatCurrency(analytics.paceVariance)}
-                </p>
+                {analytics.isCurrentYear && (
+                  <span className="text-muted-foreground">
+                    {analytics.remainingMonths} months left
+                  </span>
+                )}
               </div>
             </div>
-          )}
+
+            {/* Right: Pacing detail */}
+            {analytics.isCurrentYear && (
+              <div
+                className={`flex items-center gap-3 rounded-lg border p-4 ${analytics.isOnPace ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950' : 'border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950'}`}
+              >
+                {analytics.isOnPace ? (
+                  <TrendingUp className="h-8 w-8 shrink-0 text-green-600 dark:text-green-400" />
+                ) : (
+                  <AlertTriangle className="h-8 w-8 shrink-0 text-orange-600 dark:text-orange-400" />
+                )}
+                <div>
+                  <p className="font-medium">
+                    {analytics.isOnPace ? 'Ahead of schedule!' : 'Behind schedule'}
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    {analytics.fractionalElapsedMonths.toFixed(1)} of 12 months elapsed
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    <p className="text-sm font-medium">
+                      Expected: {formatCurrency(analytics.expectedRevenue)}
+                    </p>
+                    <p className="text-sm font-medium">
+                      Actual: {formatCurrency(analytics.totalRevenue)}
+                    </p>
+                    <p
+                      className={`text-sm font-semibold ${analytics.isOnPace ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}
+                    >
+                      {analytics.paceVariance >= 0 ? '+' : ''}
+                      {formatCurrency(analytics.paceVariance)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
+
+      {/* This Month Focus */}
+      {analytics.isCurrentYear && analytics.currentMonthFocus && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarDays className="h-5 w-5" />
+              {analytics.currentMonthFocus.monthName} Focus
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Month revenue progress */}
+              <div className="space-y-2">
+                <p className="text-muted-foreground text-sm">Revenue this month</p>
+                <p className="text-2xl font-bold">
+                  {formatCurrency(analytics.currentMonthFocus.revenueThisMonth)}
+                </p>
+                <p className="text-muted-foreground text-sm">
+                  of {formatCurrency(analytics.currentMonthFocus.monthlyTarget)} monthly target
+                </p>
+                <Progress
+                  value={Math.min(
+                    (analytics.currentMonthFocus.revenueThisMonth /
+                      analytics.currentMonthFocus.monthlyTarget) *
+                      100,
+                    100
+                  )}
+                  className="h-3"
+                />
+                <p className="text-muted-foreground text-xs">
+                  Day {analytics.currentMonthFocus.daysElapsedInMonth} of{' '}
+                  {analytics.currentMonthFocus.daysInMonth} (
+                  {analytics.currentMonthFocus.daysRemainingInMonth} days left)
+                </p>
+              </div>
+
+              {/* Cumulative context */}
+              <div className="space-y-2">
+                <p className="text-muted-foreground text-sm">
+                  Cumulative through {analytics.currentMonthFocus.monthName}
+                </p>
+                <p className="text-2xl font-bold">
+                  {formatCurrency(analytics.currentMonthFocus.cumulativeActualRevenue)}
+                </p>
+                <p className="text-muted-foreground text-sm">
+                  of {formatCurrency(analytics.currentMonthFocus.cumulativeTargetThroughMonth)}{' '}
+                  cumulative target
+                </p>
+                <Progress
+                  value={Math.min(
+                    (analytics.currentMonthFocus.cumulativeActualRevenue /
+                      analytics.currentMonthFocus.cumulativeTargetThroughMonth) *
+                      100,
+                    100
+                  )}
+                  className="h-3"
+                />
+              </div>
+            </div>
+
+            {/* Needed this month callout */}
+            {analytics.currentMonthFocus.neededThisMonth > 0 ? (
+              <div className="flex items-center gap-3 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-950">
+                <AlertTriangle className="h-6 w-6 shrink-0 text-orange-600 dark:text-orange-400" />
+                <div>
+                  <p className="font-medium">
+                    Still need {formatCurrency(analytics.currentMonthFocus.neededThisMonth)} this
+                    month
+                  </p>
+                  <p className="text-muted-foreground text-sm">
+                    to meet cumulative target through end of {analytics.currentMonthFocus.monthName}
+                    {analytics.currentMonthFocus.daysRemainingInMonth > 0 && (
+                      <>
+                        {' '}
+                        (
+                        {formatCurrency(
+                          analytics.currentMonthFocus.neededThisMonth /
+                            analytics.currentMonthFocus.daysRemainingInMonth
+                        )}
+                        /day over {analytics.currentMonthFocus.daysRemainingInMonth} remaining days)
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
+                <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600 dark:text-green-400" />
+                <div>
+                  <p className="font-medium">
+                    Cumulative target through {analytics.currentMonthFocus.monthName} met
+                  </p>
+                  <p className="text-muted-foreground text-sm">
+                    {formatCurrency(
+                      analytics.currentMonthFocus.cumulativeActualRevenue -
+                        analytics.currentMonthFocus.cumulativeTargetThroughMonth
+                    )}{' '}
+                    ahead of cumulative target
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Key Metrics Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Required Monthly Average */}
         <Card>
           <CardContent className="flex items-center gap-4 pt-6">
-            <div className="bg-primary/10 rounded-full p-3">
-              <Calendar className="text-primary h-5 w-5" />
+            <div className="bg-muted rounded-full p-3">
+              <Calendar className="text-muted-foreground h-5 w-5" />
             </div>
             <div>
               <p className="text-muted-foreground text-xs">Required Monthly Avg</p>
               <p className="text-xl font-semibold">
-                {formatCurrencyCompact(analytics.requiredMonthlyAverage)}
+                {formatCurrency(analytics.requiredMonthlyAverage)}
               </p>
               <p className="text-muted-foreground text-xs">
-                (was {formatCurrencyCompact(analytics.originalMonthlyTarget)})
+                (was {formatCurrency(analytics.originalMonthlyTarget)})
               </p>
             </div>
           </CardContent>
@@ -257,14 +370,12 @@ export function TargetTracking() {
         {/* Weekly Required */}
         <Card>
           <CardContent className="flex items-center gap-4 pt-6">
-            <div className="bg-secondary rounded-full p-3">
-              <Clock className="text-secondary-foreground h-5 w-5" />
+            <div className="bg-muted rounded-full p-3">
+              <Clock className="text-muted-foreground h-5 w-5" />
             </div>
             <div>
               <p className="text-muted-foreground text-xs">Weekly Required</p>
-              <p className="text-xl font-semibold">
-                {formatCurrencyCompact(analytics.weeklyRequired)}
-              </p>
+              <p className="text-xl font-semibold">{formatCurrency(analytics.weeklyRequired)}</p>
               <p className="text-muted-foreground text-xs">
                 {analytics.daysRemaining} days remaining
               </p>
@@ -284,14 +395,12 @@ export function TargetTracking() {
             </div>
             <div>
               <p className="text-muted-foreground text-xs">Projected Year-End</p>
-              <p className="text-xl font-semibold">
-                {formatCurrencyCompact(analytics.projectedYearEnd)}
-              </p>
+              <p className="text-xl font-semibold">{formatCurrency(analytics.projectedYearEnd)}</p>
               <p
                 className={`text-xs ${analytics.willMeetTarget ? 'text-green-600' : 'text-orange-600'}`}
               >
                 {analytics.projectedVsTarget >= 0 ? '+' : ''}
-                {formatCurrencyCompact(analytics.projectedVsTarget)} vs target
+                {formatCurrency(analytics.projectedVsTarget)} vs target
               </p>
             </div>
           </CardContent>
@@ -306,12 +415,11 @@ export function TargetTracking() {
             <div>
               <p className="text-muted-foreground text-xs">Avg Monthly Revenue</p>
               <p className="text-xl font-semibold">
-                {formatCurrencyCompact(analytics.monthlyAverageActual)}
+                {formatCurrency(analytics.monthlyAverageActual)}
               </p>
               {analytics.bestMonth && (
                 <p className="text-muted-foreground text-xs">
-                  Best: {analytics.bestMonth.month} (
-                  {formatCurrencyCompact(analytics.bestMonth.revenue)})
+                  Best: {analytics.bestMonth.month} ({formatCurrency(analytics.bestMonth.revenue)})
                 </p>
               )}
             </div>
@@ -319,91 +427,181 @@ export function TargetTracking() {
         </Card>
       </div>
 
-      {/* Charts */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Monthly Target vs Actual */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Monthly Performance vs Target</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={analytics.monthlyBreakdown}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="monthName" tick={{ fontSize: 12 }} />
-                  <YAxis
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip
-                    formatter={(value, name) => [
-                      formatCurrency(value as number),
-                      name === 'actual' ? 'Actual' : 'Target',
-                    ]}
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '6px',
-                    }}
-                  />
-                  <Legend />
+      {/* Cumulative Progress Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <TrendingUp className="h-5 w-5" />
+            Cumulative Progress
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={analytics.monthlyBreakdown}>
+                <defs>
+                  <linearGradient id="cumulativeActualGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="monthName" tick={{ fontSize: 12 }} />
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
+                />
+                <Tooltip
+                  formatter={(value, name) => [
+                    formatCurrency(value as number),
+                    name === 'cumulativeTarget' ? 'Target' : 'Actual',
+                  ]}
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '6px',
+                  }}
+                />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="cumulativeTarget"
+                  name="Target"
+                  stroke="#6b7280"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  fill="none"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="cumulativeActual"
+                  name="Actual"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#cumulativeActualGrad)"
+                />
+                {analytics.isCurrentYear && (
                   <ReferenceLine
-                    y={analytics.originalMonthlyTarget}
-                    stroke="#6b7280"
-                    strokeDasharray="5 5"
+                    x={analytics.monthlyBreakdown.find((m) => m.isCurrent)?.monthName}
+                    stroke="#3b82f6"
+                    strokeDasharray="3 3"
                     label={{
-                      value: 'Target',
-                      position: 'right',
+                      value: 'Now',
+                      position: 'top',
                       fontSize: 10,
-                      fill: '#6b7280',
+                      fill: '#3b82f6',
                     }}
                   />
-                  <Bar dataKey="actual" name="Actual" radius={[4, 4, 0, 0]}>
-                    {analytics.monthlyBreakdown.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          entry.isFuture
-                            ? '#e5e7eb'
-                            : entry.isAchieved
-                              ? '#10b981'
-                              : entry.isCurrent
-                                ? '#3b82f6'
-                                : '#f59e0b'
-                        }
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                )}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded bg-[#3b82f6]" />
+              <span>Actual cumulative</span>
             </div>
-            <div className="mt-4 flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded bg-green-500" />
-                <span>Met target</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded bg-orange-500" />
-                <span>Below target</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded bg-blue-500" />
-                <span>Current month</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded bg-gray-200" />
-                <span>Future</span>
-              </div>
+            <div className="flex items-center gap-2">
+              <div className="h-0.5 w-3 border-t-2 border-dashed border-[#6b7280]" />
+              <span>Target cumulative</span>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-0.5 border-l-2 border-dashed border-[#3b82f6]" />
+              <span>Current month</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Monthly Performance vs Target */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BarChart3 className="h-5 w-5" />
+            Monthly Performance vs Target
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={analytics.monthlyBreakdown}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="monthName" tick={{ fontSize: 12 }} />
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
+                />
+                <Tooltip
+                  formatter={(value, name) => [
+                    formatCurrency(value as number),
+                    name === 'actual' ? 'Actual' : 'Target',
+                  ]}
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '6px',
+                  }}
+                />
+                <Legend />
+                <ReferenceLine
+                  y={analytics.originalMonthlyTarget}
+                  stroke="#6b7280"
+                  strokeDasharray="5 5"
+                  label={{
+                    value: 'Target',
+                    position: 'right',
+                    fontSize: 10,
+                    fill: '#6b7280',
+                  }}
+                />
+                <Bar dataKey="actual" name="Actual" radius={[4, 4, 0, 0]}>
+                  {analytics.monthlyBreakdown.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={
+                        entry.isFuture
+                          ? '#e5e7eb'
+                          : entry.isAchieved
+                            ? '#10b981'
+                            : entry.isCurrent
+                              ? '#3b82f6'
+                              : '#f59e0b'
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded bg-green-500" />
+              <span>Met target</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded bg-orange-500" />
+              <span>Below target</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded bg-blue-500" />
+              <span>Current month</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded bg-gray-200" />
+              <span>Future</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Quarterly Breakdown */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Quarterly Breakdown</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Layers className="h-5 w-5" />
+            Quarterly Breakdown
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
@@ -423,11 +621,11 @@ export function TargetTracking() {
                   </Badge>
                 </div>
                 <div className="mt-3">
-                  <p className="text-2xl font-bold">{formatCurrencyCompact(quarter.actual)}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(quarter.actual)}</p>
                   <p className="text-muted-foreground text-sm">
-                    Target: {formatCurrencyCompact(quarter.target)}
+                    Target: {formatCurrency(quarter.target)}
                   </p>
-                  <Progress value={Math.min(quarter.progressPercent, 100)} className="mt-2 h-2" />
+                  <Progress value={Math.min(quarter.progressPercent, 100)} className="mt-2 h-3" />
                   <p className="text-muted-foreground mt-1 text-xs">
                     {quarter.progressPercent.toFixed(0)}% complete
                   </p>
