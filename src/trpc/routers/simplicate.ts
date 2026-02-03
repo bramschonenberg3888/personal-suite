@@ -7,9 +7,12 @@ export const simplicateRouter = createTRPCRouter({
   // Connection management
   connection: createTRPCRouter({
     get: protectedProcedure.query(async ({ ctx }) => {
-      return ctx.db.simplicateConnection.findUnique({
+      const connection = await ctx.db.simplicateConnection.findUnique({
         where: { userId: ctx.userId },
       });
+      if (!connection) return null;
+      const { apiKey, apiSecret, ...safe } = connection;
+      return { ...safe, isConfigured: !!apiKey && !!apiSecret };
     }),
 
     save: protectedProcedure

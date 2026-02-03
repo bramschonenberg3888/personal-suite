@@ -124,7 +124,7 @@ export function TimeEntriesList({ startDate, endDate, clients }: TimeEntriesList
     });
   }, []);
 
-  const isConnected = !!simplicateConnection?.apiKey && !!simplicateConnection?.apiSecret;
+  const isConnected = !!simplicateConnection?.isConfigured;
   const hasEmployeeId = !!simplicateConnection?.employeeId;
 
   const toggleEntry = (entryId: string) => {

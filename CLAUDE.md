@@ -26,6 +26,7 @@ src/
 └── generated/prisma/         # Prisma client (auto-generated)
 
 prisma/schema.prisma          # Database schema
+scripts/                      # Docker & launcher scripts
 __tests__/                    # Unit tests (Vitest)
 tests/                        # E2E tests (Playwright)
 ```
@@ -57,10 +58,12 @@ Fix ALL errors/warnings before continuing. Auto-fix formatting: `bun run format`
 
 ```bash
 bun dev                   # Dev server
+bun dev:docker            # Start Docker + dev server
 bun run test:run          # Unit tests
 bun run test:e2e          # E2E tests
 bun db:generate           # Regenerate Prisma client
 bun db:push               # Push schema to database
+bun db:studio             # Prisma Studio
 ```
 
 ## Design System (Ocean + Plus Jakarta Sans)

@@ -54,16 +54,6 @@ const quoteCache = new SimpleCache(30); // 30 seconds for real-time quotes
 const summaryCache = new SimpleCache(300); // 5 minutes for summaries
 const searchCache = new SimpleCache(600); // 10 minutes for search results
 
-// Cleanup expired entries every 5 minutes
-setInterval(
-  () => {
-    quoteCache.cleanup();
-    summaryCache.cleanup();
-    searchCache.cleanup();
-  },
-  5 * 60 * 1000
-);
-
 export interface QuoteResult {
   symbol: string;
   shortName: string;

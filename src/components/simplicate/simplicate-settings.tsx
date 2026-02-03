@@ -78,17 +78,17 @@ export function SimplicateSettings() {
 
   const { data: projects, isLoading: projectsLoading } = trpc.simplicate.projects.list.useQuery(
     undefined,
-    { enabled: !!connection?.apiKey && !!connection?.apiSecret }
+    { enabled: !!connection?.isConfigured }
   );
 
   const { data: services, isLoading: servicesLoading } = trpc.simplicate.services.list.useQuery(
     { projectId: newProjectMapping.projectId },
-    { enabled: !!newProjectMapping.projectId && !!connection?.apiKey && !!connection?.apiSecret }
+    { enabled: !!newProjectMapping.projectId && !!connection?.isConfigured }
   );
 
   const { data: hourTypes, isLoading: hourTypesLoading } = trpc.simplicate.hourTypes.list.useQuery(
     undefined,
-    { enabled: !!connection?.apiKey && !!connection?.apiSecret }
+    { enabled: !!connection?.isConfigured }
   );
 
   const { data: projectMappings } = trpc.simplicate.mappings.list.useQuery({
@@ -124,8 +124,8 @@ export function SimplicateSettings() {
 
   // Compute current form values (server data merged with local edits)
   const subdomain = formEdits.subdomain ?? connection?.subdomain ?? 'scex';
-  const apiKey = formEdits.apiKey ?? connection?.apiKey ?? '';
-  const apiSecret = formEdits.apiSecret ?? connection?.apiSecret ?? '';
+  const apiKey = formEdits.apiKey ?? '';
+  const apiSecret = formEdits.apiSecret ?? '';
   const hoursTypeId = formEdits.hoursTypeId ?? connection?.hoursTypeId ?? '';
 
   const hasChanges = Object.keys(formEdits).length > 0;
@@ -158,7 +158,7 @@ export function SimplicateSettings() {
     }
   };
 
-  const isConnected = !!connection?.apiKey && !!connection?.apiSecret;
+  const isConnected = !!connection?.isConfigured;
   const unmappedClients =
     filterOptions?.clients.filter((c) => !projectMappings?.some((m) => m.notionValue === c)) ?? [];
 
@@ -204,7 +204,7 @@ export function SimplicateSettings() {
               type="password"
               value={apiKey}
               onChange={(e) => handleFieldChange('apiKey', e.target.value)}
-              placeholder="Enter API key"
+              placeholder={isConnected ? '••••••••••••' : 'Enter API key'}
             />
           </div>
 
@@ -215,7 +215,7 @@ export function SimplicateSettings() {
               type="password"
               value={apiSecret}
               onChange={(e) => handleFieldChange('apiSecret', e.target.value)}
-              placeholder="Enter API secret"
+              placeholder={isConnected ? '••••••••••••' : 'Enter API secret'}
             />
           </div>
         </div>
@@ -289,7 +289,7 @@ export function SimplicateSettings() {
           <Button
             variant="outline"
             onClick={handleTestConnection}
-            disabled={testingConnection || !apiKey || !apiSecret}
+            disabled={testingConnection || (!isConnected && (!apiKey || !apiSecret))}
           >
             {testingConnection ? (
               <>
