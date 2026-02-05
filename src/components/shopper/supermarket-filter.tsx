@@ -2,6 +2,7 @@
 
 import { trpc } from '@/trpc/client';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Store, Check } from 'lucide-react';
 
@@ -41,25 +42,27 @@ export function SupermarketFilter({ className }: SupermarketFilterProps) {
     <div className={`flex items-center gap-2 ${className}`}>
       <Store className="h-4 w-4 text-muted-foreground" />
       <span className="text-sm text-muted-foreground">Search in:</span>
-      {preferences.map((supermarket) => (
-        <Button
-          key={supermarket.id}
-          variant={supermarket.enabled ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => {
-            // Don't allow disabling all supermarkets
-            if (supermarket.enabled && enabledCount <= 1) {
-              return;
-            }
-            togglePreference.mutate({ supermarketId: supermarket.id });
-          }}
-          disabled={togglePreference.isPending}
-          className="gap-1"
-        >
-          {supermarket.enabled && <Check className="h-3 w-3" />}
-          {supermarket.name}
-        </Button>
-      ))}
+      <ButtonGroup aria-label="Supermarket selection">
+        {preferences.map((supermarket) => (
+          <Button
+            key={supermarket.id}
+            variant={supermarket.enabled ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              // Don't allow disabling all supermarkets
+              if (supermarket.enabled && enabledCount <= 1) {
+                return;
+              }
+              togglePreference.mutate({ supermarketId: supermarket.id });
+            }}
+            disabled={togglePreference.isPending}
+            className="gap-1"
+          >
+            {supermarket.enabled && <Check className="h-3 w-3" />}
+            {supermarket.name}
+          </Button>
+        ))}
+      </ButtonGroup>
     </div>
   );
 }

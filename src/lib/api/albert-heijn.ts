@@ -16,6 +16,8 @@ export interface AHProduct {
   }>;
   isBonus: boolean;
   bonusPrice?: number;
+  bonusMechanism?: string;
+  bonusEndDate?: string;
 }
 
 export interface AHSearchResponse {
@@ -118,8 +120,14 @@ export async function searchProducts(
         salesUnitSize: p.salesUnitSize || '',
         // New API returns prices in euros, not cents
         priceBeforeBonus: p.priceBeforeBonus ?? undefined,
-        // currentPrice may not exist in search results - use priceBeforeBonus or bonus price
-        currentPrice: p.currentPrice ?? p.priceBeforeBonus ?? p.price?.now ?? 0,
+        // Use || to also skip 0 values (invalid for grocery prices)
+        currentPrice:
+          p.currentPrice ||
+          p.bonusPrice ||
+          p.discount?.bonusPrice ||
+          p.priceBeforeBonus ||
+          p.price?.now ||
+          0,
         category: p.taxonomies?.[0]?.name || p.mainCategory || '',
         brand: p.brand || undefined,
         images: (p.images || []).map((img: any) => ({
@@ -129,6 +137,8 @@ export async function searchProducts(
         })),
         isBonus: p.isBonus ?? p.discount?.bonusType === 'BONUS',
         bonusPrice: p.bonusPrice ?? p.discount?.bonusPrice ?? undefined,
+        bonusMechanism: p.bonusMechanism ?? p.discount?.bonusMechanism ?? undefined,
+        bonusEndDate: p.bonusEndDate ?? p.discount?.bonusEndDate ?? undefined,
       })
     );
 
@@ -152,15 +162,24 @@ export async function getProductById(id: string): Promise<AHProduct | null> {
       return null;
     }
 
-    const data = await response.json();
+    const raw = await response.json();
+    // Detail endpoint wraps product data in a productCard object
+    const data = raw.productCard ?? raw;
 
     return {
       id: String(data.webshopId || id),
       title: data.title || '',
       salesUnitSize: data.salesUnitSize || '',
-      // New API returns prices in euros, not cents
       priceBeforeBonus: data.priceBeforeBonus ?? undefined,
-      currentPrice: data.currentPrice ?? data.priceBeforeBonus ?? 0,
+      // Use || to also skip 0 values (invalid for grocery prices)
+      // When on bonus, currentPrice may be missing - fall back to bonusPrice
+      currentPrice:
+        data.currentPrice ||
+        data.bonusPrice ||
+        data.discount?.bonusPrice ||
+        data.priceBeforeBonus ||
+        data.price?.now ||
+        0,
       category: data.taxonomies?.[0]?.name || data.mainCategory || '',
       brand: data.brand || undefined,
       images: (data.images || []).map((img: any) => ({
@@ -168,8 +187,10 @@ export async function getProductById(id: string): Promise<AHProduct | null> {
         width: img.width || 0,
         height: img.height || 0,
       })),
-      isBonus: data.isBonus ?? data.discount?.bonusType === 'BONUS',
+      isBonus: !!data.bonusMechanism || data.isBonus || false,
       bonusPrice: data.bonusPrice ?? data.discount?.bonusPrice ?? undefined,
+      bonusMechanism: data.bonusMechanism ?? data.discount?.bonusMechanism ?? undefined,
+      bonusEndDate: data.bonusEndDate ?? data.discount?.bonusEndDate ?? undefined,
     };
   } catch (error) {
     console.error('AH product fetch error:', error);

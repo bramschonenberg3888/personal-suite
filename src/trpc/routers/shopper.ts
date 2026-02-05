@@ -9,6 +9,7 @@ import {
   filterByPeriod,
   type Period,
 } from '@/lib/utils/price-analytics';
+import { calculateBonusDeal } from '@/lib/utils/bonus-price';
 
 export const shopperRouter = createTRPCRouter({
   // Supermarket management
@@ -786,12 +787,35 @@ export const shopperRouter = createTRPCRouter({
     for (const tracked of trackedProducts) {
       const { product } = tracked;
       let newPrice: number | null = null;
+      let bonusMechanism: string | null = null;
+      let bonusPrice: number | null = null;
+      let bonusEndDate: Date | null = null;
 
       try {
         if (product.supermarket.name === 'Albert Heijn') {
-          const ahProduct = await albertHeijn.getProductById(product.externalId);
-          if (ahProduct) {
+          let ahProduct = await albertHeijn.getProductById(product.externalId);
+          if (!ahProduct || ahProduct.currentPrice <= 0) {
+            // Detail endpoint may fail for bonus products - fall back to search
+            const searchResult = await albertHeijn.searchProducts(product.name, 0, 10);
+            const match = searchResult.products.find((p) => p.id === product.externalId);
+            if (match && match.currentPrice > 0) {
+              ahProduct = match;
+            }
+          }
+          if (ahProduct && ahProduct.currentPrice > 0) {
             newPrice = ahProduct.currentPrice;
+
+            // Extract bonus deal data
+            if (ahProduct.bonusMechanism) {
+              bonusMechanism = ahProduct.bonusMechanism;
+              const deal = calculateBonusDeal(ahProduct.bonusMechanism, ahProduct.currentPrice);
+              if (deal) {
+                bonusPrice = Math.round(deal.unitPrice * 100) / 100;
+              }
+              if (ahProduct.bonusEndDate) {
+                bonusEndDate = new Date(ahProduct.bonusEndDate);
+              }
+            }
           }
         } else if (product.supermarket.name === 'Jumbo') {
           const jumboProduct = await jumbo.getProductById(product.externalId);
@@ -801,18 +825,30 @@ export const shopperRouter = createTRPCRouter({
           }
         }
 
-        if (newPrice !== null && newPrice !== product.currentPrice) {
-          // Update product price
+        const priceChanged = newPrice !== null && newPrice !== product.currentPrice;
+        const bonusChanged =
+          bonusMechanism !== product.bonusMechanism ||
+          bonusPrice !== product.bonusPrice ||
+          bonusEndDate?.getTime() !== product.bonusEndDate?.getTime();
+
+        if (priceChanged || bonusChanged) {
           await ctx.db.product.update({
             where: { id: product.id },
-            data: { currentPrice: newPrice },
+            data: {
+              ...(priceChanged ? { currentPrice: newPrice! } : {}),
+              bonusMechanism,
+              bonusPrice,
+              bonusEndDate,
+            },
           });
+        }
 
-          // Record price history
+        // Only record price history when actual price changes
+        if (priceChanged) {
           await ctx.db.priceHistory.create({
             data: {
               productId: product.id,
-              price: newPrice,
+              price: newPrice!,
             },
           });
         }

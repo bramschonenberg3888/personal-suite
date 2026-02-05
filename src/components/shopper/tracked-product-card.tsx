@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -41,6 +42,9 @@ interface TrackedProductCardProps {
       imageUrl: string | null;
       currentPrice: number;
       unit: string | null;
+      bonusMechanism: string | null;
+      bonusPrice: number | null;
+      bonusEndDate: Date | string | null;
       supermarket: {
         name: string;
       };
@@ -146,7 +150,7 @@ export function TrackedProductCard({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <ButtonGroup aria-label="Product actions">
             <Button
               variant="ghost"
               size="icon"
@@ -166,13 +170,13 @@ export function TrackedProductCard({
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-          </div>
+          </ButtonGroup>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-2xl font-bold">{formatPrice(product.currentPrice)}</span>
               {priceDiff !== 0 && (
                 <Badge
@@ -190,6 +194,25 @@ export function TrackedProductCard({
             </div>
             {unitPriceDisplay && (
               <p className="text-sm text-muted-foreground">{unitPriceDisplay}</p>
+            )}
+            {product.bonusMechanism && product.bonusPrice != null && (
+              <div className="bg-primary/10 rounded-md p-2 mt-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="default">{product.bonusMechanism}</Badge>
+                  {product.bonusEndDate && (
+                    <span className="text-xs text-muted-foreground">
+                      t/m{' '}
+                      {new Date(product.bonusEndDate).toLocaleDateString('nl-NL', {
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm font-semibold text-primary mt-1">
+                  {formatPrice(product.bonusPrice)}/stuk (effectieve prijs)
+                </p>
+              </div>
             )}
             <div className="flex flex-wrap gap-1 mt-2">
               {isBelowTarget && (
@@ -209,7 +232,7 @@ export function TrackedProductCard({
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex shrink-0 flex-col items-end gap-2">
             <div className="flex items-center gap-2">
               <PriceChart
                 productId={product.id}
@@ -266,7 +289,7 @@ export function TrackedProductCard({
                         if (e.key === 'Enter') handleSetTargetPrice();
                       }}
                     />
-                    <div className="flex gap-2">
+                    <ButtonGroup aria-label="Target price actions">
                       <Button size="sm" className="flex-1" onClick={handleSetTargetPrice}>
                         Save
                       </Button>
@@ -283,7 +306,7 @@ export function TrackedProductCard({
                           Clear
                         </Button>
                       )}
-                    </div>
+                    </ButtonGroup>
                   </div>
                 </PopoverContent>
               </Popover>

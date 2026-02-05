@@ -162,11 +162,14 @@ model Product {
   supermarket   Supermarket      @relation(fields: [supermarketId], references: [id], onDelete: Cascade)
   category      String?
   imageUrl      String?
-  currentPrice  Float
-  unit          String?
-  priceHistory  PriceHistory[]
-  trackedBy     TrackedProduct[]
-  updatedAt     DateTime         @updatedAt
+  currentPrice   Float
+  unit           String?
+  bonusMechanism String?
+  bonusPrice     Float?
+  bonusEndDate   DateTime?
+  priceHistory   PriceHistory[]
+  trackedBy      TrackedProduct[]
+  updatedAt      DateTime         @updatedAt
 
   @@unique([supermarketId, externalId])
 }
