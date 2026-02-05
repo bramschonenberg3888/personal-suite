@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { RefreshCw, Loader2, AlertCircle, Database, X, Check } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,12 +14,34 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { trpc } from '@/trpc/client';
 import { CostsKpiCards } from './costs-kpi-cards';
 import { CostsChart } from './costs-chart';
 import { CostsSectionBreakdown } from './costs-section-breakdown';
+import { CostsEntriesList } from './costs-entries-list';
 import { usePersistedState } from '@/hooks/use-persisted-state';
+import {
+  startOfYear,
+  endOfYear,
+  startOfQuarter,
+  endOfQuarter,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  getWeek,
+  getYear,
+  getQuarter,
+  getMonth,
+} from 'date-fns';
 
 interface DateRange {
   from?: Date;
@@ -33,6 +55,13 @@ export function CostsDashboard() {
     []
   );
   const [sectionsOpen, setSectionsOpen] = useState(false);
+  const [selectedYear, setSelectedYear] = usePersistedState('finance.costs.selectedYear', 'all');
+  const [selectedQuarter, setSelectedQuarter] = usePersistedState(
+    'finance.costs.selectedQuarter',
+    'all'
+  );
+  const [selectedMonth, setSelectedMonth] = usePersistedState('finance.costs.selectedMonth', 'all');
+  const [selectedWeek, setSelectedWeek] = usePersistedState('finance.costs.selectedWeek', 'all');
 
   const utils = trpc.useUtils();
   const { data: connection, isLoading: connectionLoading } = trpc.costs.connection.get.useQuery();
@@ -41,10 +70,95 @@ export function CostsDashboard() {
     enabled: !!connection?.costsDatabaseId,
   });
 
+  // Fetch all entries to derive date filter options
+  const { data: allEntries } = trpc.costs.entries.list.useQuery(undefined, {
+    enabled: !!connection?.costsDatabaseId,
+  });
+
+  // Derive available years, quarters, months, weeks from entries
+  const periodFilters = useMemo(() => {
+    if (!allEntries) return { years: [], quarters: [], months: [], weeks: [] };
+
+    const years = new Set<number>();
+    const quarters = new Set<string>();
+    const months = new Set<number>();
+    const weeks = new Set<number>();
+
+    for (const entry of allEntries) {
+      if (entry.invoiceDate) {
+        const date = new Date(entry.invoiceDate);
+        years.add(getYear(date));
+        quarters.add(`Q${getQuarter(date)}`);
+        months.add(getMonth(date) + 1);
+        weeks.add(getWeek(date, { weekStartsOn: 1 }));
+      }
+    }
+
+    return {
+      years: Array.from(years).sort((a, b) => b - a),
+      quarters: ['Q1', 'Q2', 'Q3', 'Q4'].filter((q) => quarters.has(q)),
+      months: Array.from(months).sort((a, b) => a - b),
+      weeks: Array.from(weeks).sort((a, b) => a - b),
+    };
+  }, [allEntries]);
+
+  // Compute effective date range based on period selections
+  const effectiveDateRange = useMemo(() => {
+    // If manual date range is set, use that
+    if (dateRange.from || dateRange.to) {
+      return dateRange;
+    }
+
+    // Otherwise compute from period selections
+    const now = new Date();
+    let from: Date | undefined;
+    let to: Date | undefined;
+
+    if (selectedYear !== 'all') {
+      const year = parseInt(selectedYear);
+      from = startOfYear(new Date(year, 0, 1));
+      to = endOfYear(new Date(year, 0, 1));
+
+      if (selectedQuarter !== 'all') {
+        const quarter = parseInt(selectedQuarter.replace('Q', ''));
+        const quarterMonth = (quarter - 1) * 3;
+        from = startOfQuarter(new Date(year, quarterMonth, 1));
+        to = endOfQuarter(new Date(year, quarterMonth, 1));
+      }
+
+      if (selectedMonth !== 'all') {
+        const month = parseInt(selectedMonth) - 1;
+        from = startOfMonth(new Date(year, month, 1));
+        to = endOfMonth(new Date(year, month, 1));
+      }
+
+      if (selectedWeek !== 'all') {
+        const week = parseInt(selectedWeek);
+        const firstDayOfYear = new Date(year, 0, 1);
+        const daysOffset = (week - 1) * 7;
+        const weekDate = new Date(firstDayOfYear);
+        weekDate.setDate(firstDayOfYear.getDate() + daysOffset);
+        from = startOfWeek(weekDate, { weekStartsOn: 1 });
+        to = endOfWeek(weekDate, { weekStartsOn: 1 });
+      }
+    } else if (selectedWeek !== 'all') {
+      const year = now.getFullYear();
+      const week = parseInt(selectedWeek);
+      const firstDayOfYear = new Date(year, 0, 1);
+      const daysOffset = (week - 1) * 7;
+      const weekDate = new Date(firstDayOfYear);
+      weekDate.setDate(firstDayOfYear.getDate() + daysOffset);
+      from = startOfWeek(weekDate, { weekStartsOn: 1 });
+      to = endOfWeek(weekDate, { weekStartsOn: 1 });
+    }
+
+    return { from, to };
+  }, [dateRange, selectedYear, selectedQuarter, selectedMonth, selectedWeek]);
+
   const { data: kpiData, isLoading: kpisLoading } = trpc.costs.entries.kpis.useQuery(
     {
-      startDate: dateRange.from,
-      endDate: dateRange.to,
+      startDate: effectiveDateRange.from,
+      endDate: effectiveDateRange.to,
       vatSections: selectedSections.length > 0 ? selectedSections : undefined,
     },
     { enabled: !!connection?.costsDatabaseId }
@@ -64,9 +178,35 @@ export function CostsDashboard() {
   const clearFilters = () => {
     setDateRange({});
     setSelectedSections([]);
+    setSelectedYear('all');
+    setSelectedQuarter('all');
+    setSelectedMonth('all');
+    setSelectedWeek('all');
   };
 
-  const hasFilters = dateRange.from || dateRange.to || selectedSections.length > 0;
+  const hasFilters =
+    dateRange.from ||
+    dateRange.to ||
+    selectedSections.length > 0 ||
+    selectedYear !== 'all' ||
+    selectedQuarter !== 'all' ||
+    selectedMonth !== 'all' ||
+    selectedWeek !== 'all';
+
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
 
   const toggleSection = (section: string) => {
     setSelectedSections((prev) =>
@@ -137,32 +277,71 @@ export function CostsDashboard() {
         <CardContent className="flex flex-wrap items-end justify-between gap-4 pt-6">
           <div className="flex flex-wrap gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium">From</label>
-              <Input
-                type="date"
-                className="w-40"
-                value={dateRange.from?.toISOString().split('T')[0] ?? ''}
-                onChange={(e) =>
-                  setDateRange((prev) => ({
-                    ...prev,
-                    from: e.target.value ? new Date(e.target.value) : undefined,
-                  }))
-                }
-              />
+              <label className="mb-1 block text-sm font-medium">Year</label>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-28">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {periodFilters.years.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
             <div>
-              <label className="mb-1 block text-sm font-medium">To</label>
-              <Input
-                type="date"
-                className="w-40"
-                value={dateRange.to?.toISOString().split('T')[0] ?? ''}
-                onChange={(e) =>
-                  setDateRange((prev) => ({
-                    ...prev,
-                    to: e.target.value ? new Date(e.target.value) : undefined,
-                  }))
-                }
-              />
+              <label className="mb-1 block text-sm font-medium">Quarter</label>
+              <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
+                <SelectTrigger className="w-28">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {periodFilters.quarters.map((q) => (
+                    <SelectItem key={q} value={q}>
+                      {q}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Month</label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-36">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {periodFilters.months.map((m) => (
+                    <SelectItem key={m} value={m.toString()}>
+                      {monthNames[m - 1]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Week</label>
+              <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                <SelectTrigger className="w-28">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {periodFilters.weeks.map((w) => (
+                    <SelectItem key={w} value={w.toString()}>
+                      Week {w}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {filterOptions && filterOptions.vatSections.length > 0 && (
@@ -205,6 +384,35 @@ export function CostsDashboard() {
                 </Popover>
               </div>
             )}
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">From</label>
+              <Input
+                type="date"
+                className="w-40"
+                value={dateRange.from?.toISOString().split('T')[0] ?? ''}
+                onChange={(e) =>
+                  setDateRange((prev) => ({
+                    ...prev,
+                    from: e.target.value ? new Date(e.target.value) : undefined,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">To</label>
+              <Input
+                type="date"
+                className="w-40"
+                value={dateRange.to?.toISOString().split('T')[0] ?? ''}
+                onChange={(e) =>
+                  setDateRange((prev) => ({
+                    ...prev,
+                    to: e.target.value ? new Date(e.target.value) : undefined,
+                  }))
+                }
+              />
+            </div>
           </div>
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
@@ -232,13 +440,20 @@ export function CostsDashboard() {
 
       {/* Charts */}
       <CostsChart
-        startDate={dateRange.from}
-        endDate={dateRange.to}
+        startDate={effectiveDateRange.from}
+        endDate={effectiveDateRange.to}
         vatSections={selectedSections.length > 0 ? selectedSections : undefined}
       />
 
       {/* Section Breakdown */}
-      <CostsSectionBreakdown startDate={dateRange.from} endDate={dateRange.to} />
+      <CostsSectionBreakdown startDate={effectiveDateRange.from} endDate={effectiveDateRange.to} />
+
+      {/* Entries List */}
+      <CostsEntriesList
+        startDate={effectiveDateRange.from}
+        endDate={effectiveDateRange.to}
+        vatSections={selectedSections.length > 0 ? selectedSections : undefined}
+      />
     </div>
   );
 }

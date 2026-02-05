@@ -100,6 +100,18 @@ const METRIC_COLORS: Record<Metric, string> = {
   hours: '#8b5cf6',
 };
 
+// Colors for year-over-year comparison
+const YEAR_COLORS = [
+  '#3b82f6', // blue
+  '#10b981', // green
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+  '#84cc16', // lime
+];
+
 export function InteractiveMetricsChart({
   startDate,
   endDate,
@@ -218,6 +230,57 @@ export function InteractiveMetricsChart({
     return periods;
   }, [startDate, endDate, groupBy]);
 
+  // Extract year from period string
+  const extractYear = (period: string): string | null => {
+    // Handle month format: "2024-januari"
+    const monthMatch = period.match(/^(\d{4})-\w+$/);
+    if (monthMatch) return monthMatch[1];
+
+    // Handle week format: "2024-W01"
+    const weekMatch = period.match(/^(\d{4})-W\d{2}$/);
+    if (weekMatch) return weekMatch[1];
+
+    // Handle quarter format: "2024 Q1"
+    const quarterMatch = period.match(/^(\d{4}) Q\d$/);
+    if (quarterMatch) return quarterMatch[1];
+
+    // Handle year format: "2024"
+    if (/^\d{4}$/.test(period)) return period;
+
+    return null;
+  };
+
+  // Extract period without year for YoY comparison
+  const extractPeriodWithoutYear = (period: string): string => {
+    // Handle month format: "2024-januari" → "januari"
+    const monthMatch = period.match(/^\d{4}-(\w+)$/);
+    if (monthMatch) return monthMatch[1];
+
+    // Handle week format: "2024-W01" → "W01"
+    const weekMatch = period.match(/^\d{4}-(W\d{2})$/);
+    if (weekMatch) return weekMatch[1];
+
+    // Handle quarter format: "2024 Q1" → "Q1"
+    const quarterMatch = period.match(/^\d{4} (Q\d)$/);
+    if (quarterMatch) return quarterMatch[1];
+
+    return period;
+  };
+
+  // Get years present in data
+  const yearsInData = useMemo(() => {
+    if (!data) return [];
+    const years = new Set<string>();
+    for (const item of data) {
+      const year = extractYear(item.period);
+      if (year) years.add(year);
+    }
+    return Array.from(years).sort();
+  }, [data]);
+
+  // Check if YoY mode should be active (enabled and multiple years)
+  const isYoyActive = compareMode === 'yoy' && yearsInData.length > 1;
+
   // Transform data based on settings
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -287,9 +350,127 @@ export function InteractiveMetricsChart({
     return transformed;
   }, [data, generatePeriods, cumulative, movingAverage, metric]);
 
+  // Transform data for year-over-year comparison
+  const yoyChartData = useMemo(() => {
+    if (!isYoyActive || !data) return [];
+
+    // Group data by period (without year)
+    const periodMap = new Map<string, Record<string, number | string>>();
+
+    for (const item of data) {
+      const periodWithoutYear = extractPeriodWithoutYear(item.period);
+      const year = extractYear(item.period);
+      if (!year) continue;
+
+      if (!periodMap.has(periodWithoutYear)) {
+        periodMap.set(periodWithoutYear, { period: periodWithoutYear });
+      }
+
+      const entry = periodMap.get(periodWithoutYear)!;
+      entry[`${metric}_${year}`] = item[metric];
+    }
+
+    // Convert to array and sort by period
+    const result = Array.from(periodMap.values());
+
+    // Sort periods logically
+    result.sort((a, b) => {
+      const periodA = a.period as string;
+      const periodB = b.period as string;
+
+      // Week sort: W01 < W02
+      const weekMatchA = periodA.match(/^W(\d{2})$/);
+      const weekMatchB = periodB.match(/^W(\d{2})$/);
+      if (weekMatchA && weekMatchB) {
+        return parseInt(weekMatchA[1]) - parseInt(weekMatchB[1]);
+      }
+
+      // Quarter sort: Q1 < Q2
+      const quarterMatchA = periodA.match(/^Q(\d)$/);
+      const quarterMatchB = periodB.match(/^Q(\d)$/);
+      if (quarterMatchA && quarterMatchB) {
+        return parseInt(quarterMatchA[1]) - parseInt(quarterMatchB[1]);
+      }
+
+      // Month sort using Dutch month names
+      const monthOrder = [
+        'januari',
+        'februari',
+        'maart',
+        'april',
+        'mei',
+        'juni',
+        'juli',
+        'augustus',
+        'september',
+        'oktober',
+        'november',
+        'december',
+      ];
+      const monthIndexA = monthOrder.indexOf(periodA.toLowerCase());
+      const monthIndexB = monthOrder.indexOf(periodB.toLowerCase());
+      if (monthIndexA !== -1 && monthIndexB !== -1) {
+        return monthIndexA - monthIndexB;
+      }
+
+      return periodA.localeCompare(periodB);
+    });
+
+    // Apply cumulative if enabled (per year)
+    if (cumulative) {
+      const cumulativeSums: Record<string, number> = {};
+      return result.map((item) => {
+        const newItem = { ...item };
+        for (const year of yearsInData) {
+          const key = `${metric}_${year}`;
+          const value = item[key];
+          if (typeof value === 'number') {
+            cumulativeSums[key] = (cumulativeSums[key] || 0) + value;
+            newItem[key] = cumulativeSums[key];
+          }
+        }
+        return newItem;
+      });
+    }
+
+    return result;
+  }, [isYoyActive, data, metric, yearsInData, cumulative]);
+
   // Primary color based on metric
   const primaryColor = METRIC_COLORS[metric];
   const secondaryColor = METRIC_COLORS[secondaryMetric];
+
+  // Format period label for YoY mode (without year)
+  function formatYoyPeriodLabel(period: string): string {
+    // Month names: capitalize first letter
+    const monthOrder = [
+      'januari',
+      'februari',
+      'maart',
+      'april',
+      'mei',
+      'juni',
+      'juli',
+      'augustus',
+      'september',
+      'oktober',
+      'november',
+      'december',
+    ];
+    const monthIndex = monthOrder.indexOf(period.toLowerCase());
+    if (monthIndex !== -1) {
+      return period.charAt(0).toUpperCase() + period.slice(1, 3);
+    }
+
+    // Week: W01 → W1
+    const weekMatch = period.match(/^W(\d{2})$/);
+    if (weekMatch) {
+      return `W${parseInt(weekMatch[1])}`;
+    }
+
+    // Quarter: Q1 → Q1
+    return period;
+  }
 
   // Render the appropriate chart type
   const renderChart = () => {
@@ -297,23 +478,26 @@ export function InteractiveMetricsChart({
       return <Skeleton className="h-72 w-full" />;
     }
 
-    if (chartData.length === 0) {
+    // Use yoyChartData if YoY mode is active
+    const displayData = isYoyActive ? yoyChartData : chartData;
+
+    if (displayData.length === 0) {
       return (
-        <div className="flex h-72 items-center justify-center text-gray-500">
+        <div className="text-muted-foreground flex h-72 items-center justify-center">
           No data available for the selected period
         </div>
       );
     }
 
     const commonProps = {
-      data: chartData,
+      data: displayData,
       margin: { top: 10, right: 30, left: 0, bottom: 0 },
     };
 
     const xAxisProps = {
       dataKey: 'period',
       tick: { fontSize: 12 },
-      tickFormatter: formatPeriodLabel,
+      tickFormatter: isYoyActive ? formatYoyPeriodLabel : formatPeriodLabel,
     };
 
     const yAxisProps = {
@@ -325,6 +509,10 @@ export function InteractiveMetricsChart({
     const tooltipProps = {
       formatter: (value: number | undefined, name: string | undefined) => {
         if (value === undefined) return '';
+        // In YoY mode, name is like "2024" or "2023"
+        if (isYoyActive) {
+          return formatValue(value, metric);
+        }
         const metricKey = (name ?? '').toLowerCase().replace(' ', '') as Metric;
         if (metricKey === 'hours' || name === 'Hours') return formatHours(value);
         return formatCurrency(value);
@@ -346,6 +534,87 @@ export function InteractiveMetricsChart({
         <Legend />
       </>
     );
+
+    // Render YoY chart with multiple lines per year
+    if (isYoyActive) {
+      if (chartType === 'area') {
+        return (
+          <ResponsiveContainer width="100%" height={288}>
+            <AreaChart {...commonProps}>
+              <defs>
+                {yearsInData.map((year, index) => (
+                  <linearGradient key={year} id={`colorYear${year}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset="5%"
+                      stopColor={YEAR_COLORS[index % YEAR_COLORS.length]}
+                      stopOpacity={0.3}
+                    />
+                    <stop
+                      offset="95%"
+                      stopColor={YEAR_COLORS[index % YEAR_COLORS.length]}
+                      stopOpacity={0}
+                    />
+                  </linearGradient>
+                ))}
+              </defs>
+              {commonElements}
+              {yearsInData.map((year, index) => (
+                <Area
+                  key={year}
+                  type="monotone"
+                  dataKey={`${metric}_${year}`}
+                  name={year}
+                  stroke={YEAR_COLORS[index % YEAR_COLORS.length]}
+                  fillOpacity={1}
+                  fill={`url(#colorYear${year})`}
+                  connectNulls
+                />
+              ))}
+            </AreaChart>
+          </ResponsiveContainer>
+        );
+      }
+
+      if (chartType === 'line') {
+        return (
+          <ResponsiveContainer width="100%" height={288}>
+            <LineChart {...commonProps}>
+              {commonElements}
+              {yearsInData.map((year, index) => (
+                <Line
+                  key={year}
+                  type="monotone"
+                  dataKey={`${metric}_${year}`}
+                  name={year}
+                  stroke={YEAR_COLORS[index % YEAR_COLORS.length]}
+                  strokeWidth={2}
+                  dot={{ fill: YEAR_COLORS[index % YEAR_COLORS.length], strokeWidth: 2 }}
+                  connectNulls
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        );
+      }
+
+      // Bar chart for YoY
+      return (
+        <ResponsiveContainer width="100%" height={288}>
+          <BarChart {...commonProps}>
+            {commonElements}
+            {yearsInData.map((year, index) => (
+              <Bar
+                key={year}
+                dataKey={`${metric}_${year}`}
+                name={year}
+                fill={YEAR_COLORS[index % YEAR_COLORS.length]}
+                radius={[4, 4, 0, 0]}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    }
 
     if (chartType === 'area') {
       return (
@@ -546,11 +815,12 @@ export function InteractiveMetricsChart({
               Compare:
             </Label>
             <Select value={compareMode} onValueChange={(v) => setCompareMode(v as CompareMode)}>
-              <SelectTrigger id="compare-select" className="w-32">
+              <SelectTrigger id="compare-select" className="w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
+                <SelectItem value="yoy">Year over Year</SelectItem>
                 <SelectItem value="multi">Multi-metric</SelectItem>
               </SelectContent>
             </Select>
