@@ -1,5 +1,8 @@
 import { Client, isFullDatabase, isFullPage } from '@notionhq/client';
-import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints';
+import type {
+  CreatePageParameters,
+  PageObjectResponse,
+} from '@notionhq/client/build/src/api-endpoints';
 import { env } from '@/env';
 
 // Dutch property names → internal field names mapping
@@ -140,6 +143,81 @@ export async function validateCostsConnection(databaseId: string): Promise<{
         : message,
     };
   }
+}
+
+// Cache for writable properties per database
+const writablePropertiesCache = new Map<string, Map<string, string>>();
+
+export async function getWritableProperties(databaseId: string): Promise<Map<string, string>> {
+  const cached = writablePropertiesCache.get(databaseId);
+  if (cached) return cached;
+
+  const notion = getNotionClient();
+  const database = await notion.databases.retrieve({ database_id: databaseId });
+
+  if (!isFullDatabase(database)) {
+    throw new Error('Unable to access database properties');
+  }
+
+  const readOnlyTypes = new Set([
+    'formula',
+    'rollup',
+    'created_time',
+    'created_by',
+    'last_edited_time',
+    'last_edited_by',
+  ]);
+
+  const writable = new Map<string, string>();
+  for (const [name, prop] of Object.entries(database.properties)) {
+    if (!readOnlyTypes.has(prop.type)) {
+      writable.set(name, prop.type);
+    }
+  }
+
+  writablePropertiesCache.set(databaseId, writable);
+  return writable;
+}
+
+export interface CreateCostInput {
+  name: string;
+  amountExclVat: number;
+  vat: number;
+  invoiceDate: string;
+  description?: string;
+  vatRemarks?: string;
+}
+
+export async function createCostEntryInNotion(
+  databaseId: string,
+  input: CreateCostInput
+): Promise<string> {
+  const notion = getNotionClient();
+  const writable = await getWritableProperties(databaseId);
+
+  const properties: CreatePageParameters['properties'] = {
+    Naam: { title: [{ text: { content: input.name } }] },
+    'Bedrag excl. BTW': { number: input.amountExclVat },
+    BTW: { number: input.vat },
+    'Datum factuur': { date: { start: input.invoiceDate } },
+  };
+
+  if (input.description && writable.has('Omschrijving')) {
+    properties['Omschrijving'] = { rich_text: [{ text: { content: input.description } }] };
+  }
+
+  if (input.vatRemarks && writable.has('Opmerkingen BTW aangifte')) {
+    properties['Opmerkingen BTW aangifte'] = {
+      rich_text: [{ text: { content: input.vatRemarks } }],
+    };
+  }
+
+  const page = await notion.pages.create({
+    parent: { database_id: databaseId },
+    properties,
+  });
+
+  return page.id;
 }
 
 export async function fetchAllCostEntries(databaseId: string): Promise<CostEntry[]> {

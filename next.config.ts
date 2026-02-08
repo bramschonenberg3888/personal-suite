@@ -3,6 +3,12 @@ import './src/env';
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@t3-oss/env-nextjs', '@t3-oss/env-core'],
+  serverExternalPackages: ['@ai-sdk/anthropic'],
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
 };
 
 export default nextConfig;

@@ -27,6 +27,7 @@ import { CostsKpiCards } from './costs-kpi-cards';
 import { CostsChart } from './costs-chart';
 import { CostsSectionBreakdown } from './costs-section-breakdown';
 import { CostsEntriesList } from './costs-entries-list';
+import { InvoiceUploadDialog } from '@/components/invoice-upload/invoice-upload-dialog';
 import { usePersistedState } from '@/hooks/use-persisted-state';
 import {
   startOfYear,
@@ -246,6 +247,7 @@ export function CostsDashboard() {
           )}
         </div>
         <div className="flex gap-2">
+          <InvoiceUploadDialog onSuccess={() => utils.costs.entries.invalidate()} />
           <Button onClick={handleSync} disabled={syncMutation.isPending}>
             {syncMutation.isPending ? (
               <>

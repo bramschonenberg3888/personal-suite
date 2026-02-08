@@ -13,9 +13,10 @@ src/
 │   ├── ui/                   # shadcn/ui components
 │   ├── layout/               # App shell, sidebar
 │   ├── theme/                # Theme provider (next-themes)
-│   └── [feature]/            # Feature-specific components (costs, invoices, revenue, portfolio, shopper, drawing, weather, simplicate)
+│   └── [feature]/            # Feature-specific components (costs, invoices, invoice-upload, revenue, portfolio, shopper, drawing, weather, simplicate)
 ├── lib/
-│   ├── api/                  # External API clients (yahoo-finance, justetf, openfigi, notion, notion-costs, open-meteo, albert-heijn, jumbo, simplicate)
+│   ├── api/                  # External API clients (yahoo-finance, justetf, openfigi, notion, notion-costs, open-meteo, albert-heijn, jumbo, simplicate, claude)
+│   ├── workflows/            # Lightweight pipeline engine for multi-step automations
 │   ├── utils/                # Helper utilities
 │   ├── auth.ts               # NextAuth config
 │   └── db.ts                 # Prisma client
@@ -36,6 +37,7 @@ tests/                        # E2E tests (Playwright)
 - tRPC routers → `src/trpc/routers/`, one per feature
 - Components → `src/components/[feature]/`, one per file
 - API clients → `src/lib/api/`, one per external service
+- Workflows → `src/lib/workflows/`, pipeline + types
 - Hooks → `src/hooks/`, one per hook
 - Tests → `__tests__/` (unit) or `tests/` (E2E)
 
