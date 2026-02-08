@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * The getUrl function determines the tRPC API endpoint URL based on:
  * 1. Browser environment: returns "/api/trpc" (relative URL)
  * 2. Server with VERCEL_URL: returns "https://${VERCEL_URL}/api/trpc"
- * 3. Server without VERCEL_URL: returns "http://localhost:3000/api/trpc"
+ * 3. Server without VERCEL_URL: returns "http://localhost:3088/api/trpc"
  *
  * Since getUrl is not exported directly, we test the logic by recreating it
  * and testing with different environment configurations.
@@ -36,7 +36,7 @@ describe('getUrl function logic', () => {
     const base = (() => {
       if (isWindow) return '';
       if (vercelUrl) return `https://${vercelUrl}`;
-      return 'http://localhost:3000';
+      return 'http://localhost:3088';
     })();
     return `${base}/api/trpc`;
   }
@@ -96,18 +96,18 @@ describe('getUrl function logic', () => {
   describe('server environment without VERCEL_URL', () => {
     it('should return localhost URL with http protocol', () => {
       const result = getUrl(false, undefined);
-      expect(result).toBe('http://localhost:3000/api/trpc');
+      expect(result).toBe('http://localhost:3088/api/trpc');
     });
 
     it('should return localhost URL when VERCEL_URL is empty string', () => {
       const result = getUrl(false, '');
       // Empty string is falsy, so should fallback to localhost
-      expect(result).toBe('http://localhost:3000/api/trpc');
+      expect(result).toBe('http://localhost:3088/api/trpc');
     });
 
-    it('should use port 3000 by default', () => {
+    it('should use port 3088 by default', () => {
       const result = getUrl(false, undefined);
-      expect(result).toContain(':3000');
+      expect(result).toContain(':3088');
     });
 
     it('should use http (not https) for localhost', () => {
@@ -200,7 +200,7 @@ describe('environment variable handling', () => {
       const base = (() => {
         if (isWindow) return '';
         if (vercelUrl) return `https://${vercelUrl}`;
-        return 'http://localhost:3000';
+        return 'http://localhost:3088';
       })();
       return `${base}/api/trpc`;
     }
@@ -223,7 +223,7 @@ describe('environment variable handling', () => {
     });
 
     it('should handle local development (no Vercel)', () => {
-      expect(getUrl(false, undefined)).toBe('http://localhost:3000/api/trpc');
+      expect(getUrl(false, undefined)).toBe('http://localhost:3088/api/trpc');
     });
 
     it('should handle client-side navigation', () => {
@@ -278,7 +278,7 @@ describe('URL construction edge cases', () => {
     const base = (() => {
       if (isWindow) return '';
       if (vercelUrl) return `https://${vercelUrl}`;
-      return 'http://localhost:3000';
+      return 'http://localhost:3088';
     })();
     return `${base}/api/trpc`;
   }
@@ -316,7 +316,7 @@ describe('URL construction edge cases', () => {
 
   it('should handle localhost without modifications', () => {
     const result = getUrl(false, undefined);
-    expect(result).toBe('http://localhost:3000/api/trpc');
+    expect(result).toBe('http://localhost:3088/api/trpc');
     // Verify no extra slashes
     expect(result).not.toContain('//api');
   });
@@ -351,7 +351,7 @@ describe('IIFE pattern used in getUrl', () => {
     const base = (() => {
       if (isWindow) return '';
       if (vercelUrl) return `https://${vercelUrl}`;
-      return 'http://localhost:3000';
+      return 'http://localhost:3088';
     })();
 
     expect(base).toBe('https://app.vercel.app');
