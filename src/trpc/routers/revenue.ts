@@ -50,6 +50,17 @@ export const revenueRouter = createTRPCRouter({
 
     const entries = await fetchAllTimeEntries(connection.revenueDatabaseId);
 
+    // Collect all Notion page IDs from the fetched entries
+    const notionPageIds = new Set(entries.map((e) => e.id));
+
+    // Delete local entries that no longer exist in Notion
+    await ctx.db.revenueEntry.deleteMany({
+      where: {
+        userId: ctx.userId,
+        notionPageId: { notIn: [...notionPageIds] },
+      },
+    });
+
     // Upsert all entries
     for (const entry of entries) {
       await ctx.db.revenueEntry.upsert({
