@@ -61,6 +61,7 @@ const STATUS_COLORS: Record<string, string> = {
   gefactureerd: '#f59e0b', // amber - invoiced, awaiting payment
   verzonden: '#3b82f6', // blue - sent
   concept: '#6b7280', // gray - draft
+  'niet gefactureerd': '#ef4444', // red - not invoiced
   default: '#6b7280',
 };
 
@@ -118,6 +119,10 @@ export function InvoicesDashboard() {
     },
     { enabled: !!connection }
   );
+
+  const { data: uninvoiced } = trpc.revenue.entries.uninvoiced.useQuery(undefined, {
+    enabled: !!connection,
+  });
 
   const syncMutation = trpc.revenue.sync.useMutation({
     onSuccess: () => {
@@ -181,6 +186,22 @@ export function InvoicesDashboard() {
       });
   }, [invoices, selectedYear, selectedQuarter, selectedMonth, selectedWeek]);
 
+  // Map uninvoiced data by year for easy lookup
+  type UninvoicedEntry = {
+    year: number;
+    revenue: number;
+    taxReservation: number;
+    entryCount: number;
+  };
+  const uninvoicedByYear = useMemo(() => {
+    const map = new Map<number, UninvoicedEntry>();
+    if (!uninvoiced) return map;
+    for (const entry of uninvoiced) {
+      map.set(entry.year, entry);
+    }
+    return map;
+  }, [uninvoiced]);
+
   // Group invoices by year
   const groupedByYear = useMemo(() => {
     const groups = new Map<number, typeof filteredInvoices>();
@@ -192,16 +213,36 @@ export function InvoicesDashboard() {
       groups.set(year, existing);
     }
 
+    // Ensure years with only uninvoiced entries also appear
+    if (selectedStatus === 'all' || selectedStatus === 'niet gefactureerd') {
+      for (const [year] of uninvoicedByYear) {
+        if (!groups.has(year)) {
+          groups.set(year, []);
+        }
+      }
+    }
+
     return Array.from(groups.entries()).sort(([a], [b]) => b - a);
-  }, [filteredInvoices]);
+  }, [filteredInvoices, uninvoicedByYear, selectedStatus]);
+
+  // Calculate filtered uninvoiced total (respects year filter)
+  const filteredUninvoicedTotal = useMemo(() => {
+    if (!uninvoiced) return 0;
+    if (selectedYear === 'all') {
+      return uninvoiced.reduce((sum, entry) => sum + entry.revenue, 0);
+    }
+    const yearEntry = uninvoicedByYear.get(parseInt(selectedYear));
+    return yearEntry?.revenue ?? 0;
+  }, [uninvoiced, uninvoicedByYear, selectedYear]);
 
   // Calculate metrics
   const metrics = useMemo(() => {
-    if (!filteredInvoices.length) {
+    if (!filteredInvoices.length && !filteredUninvoicedTotal) {
       return {
         totalRevenue: 0,
         paidTotal: 0,
         outstandingTotal: 0,
+        uninvoicedTotal: 0,
         invoiceCount: 0,
         avgInvoice: 0,
         totalVat: 0,
@@ -209,7 +250,8 @@ export function InvoicesDashboard() {
       };
     }
 
-    const totalRevenue = filteredInvoices.reduce((sum, inv) => sum + inv.revenue, 0);
+    const totalRevenue =
+      filteredInvoices.reduce((sum, inv) => sum + inv.revenue, 0) + filteredUninvoicedTotal;
     const paidTotal = filteredInvoices
       .filter((inv) => inv.invoiceStatus?.toLowerCase() === 'betaald')
       .reduce((sum, inv) => sum + inv.revenue, 0);
@@ -217,7 +259,7 @@ export function InvoicesDashboard() {
       .filter((inv) => inv.invoiceStatus?.toLowerCase() === 'gefactureerd')
       .reduce((sum, inv) => sum + inv.revenue, 0);
     const invoiceCount = filteredInvoices.length;
-    const avgInvoice = totalRevenue / invoiceCount;
+    const avgInvoice = invoiceCount > 0 ? totalRevenue / invoiceCount : 0;
     const totalVat = totalRevenue * VAT_RATE;
     const totalIncomeTax = filteredInvoices.reduce((sum, inv) => sum + inv.taxReservation, 0);
 
@@ -225,16 +267,17 @@ export function InvoicesDashboard() {
       totalRevenue,
       paidTotal,
       outstandingTotal,
+      uninvoicedTotal: filteredUninvoicedTotal,
       invoiceCount,
       avgInvoice,
       totalVat,
       totalIncomeTax,
     };
-  }, [filteredInvoices]);
+  }, [filteredInvoices, filteredUninvoicedTotal]);
 
   // Status breakdown for chart
   const statusBreakdown = useMemo(() => {
-    if (!filteredInvoices.length) return [];
+    if (!filteredInvoices.length && !filteredUninvoicedTotal) return [];
 
     const byStatus = new Map<string, { count: number; revenue: number }>();
 
@@ -246,6 +289,17 @@ export function InvoicesDashboard() {
       byStatus.set(status, current);
     }
 
+    if (filteredUninvoicedTotal > 0) {
+      const uninvoicedCount =
+        selectedYear === 'all'
+          ? (uninvoiced?.reduce((sum, e) => sum + e.entryCount, 0) ?? 0)
+          : (uninvoicedByYear.get(parseInt(selectedYear))?.entryCount ?? 0);
+      byStatus.set('Niet gefactureerd', {
+        count: uninvoicedCount,
+        revenue: filteredUninvoicedTotal,
+      });
+    }
+
     return Array.from(byStatus.entries())
       .map(([status, data]) => ({
         name: status,
@@ -253,7 +307,7 @@ export function InvoicesDashboard() {
         count: data.count,
       }))
       .sort((a, b) => b.value - a.value);
-  }, [filteredInvoices]);
+  }, [filteredInvoices, filteredUninvoicedTotal, uninvoiced, uninvoicedByYear, selectedYear]);
 
   // Client type breakdown for chart
   const clientTypeBreakdown = useMemo(() => {
@@ -591,7 +645,7 @@ export function InvoicesDashboard() {
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           <Card>
             <CardContent className="flex items-center gap-4 py-4">
               <div className="bg-primary/10 rounded-full p-3">
@@ -625,6 +679,20 @@ export function InvoicesDashboard() {
                 <p className="text-muted-foreground text-xs">Outstanding</p>
                 <p className="text-xl font-semibold">
                   {formatCurrencyShort(metrics.outstandingTotal)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="flex items-center gap-4 py-4">
+              <div className="rounded-full bg-red-500/10 p-3">
+                <FileText className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Niet gefactureerd</p>
+                <p className="text-xl font-semibold">
+                  {formatCurrencyShort(metrics.uninvoicedTotal)}
                 </p>
               </div>
             </CardContent>
@@ -985,6 +1053,11 @@ export function InvoicesDashboard() {
         </Card>
       ) : (
         groupedByYear.map(([year, yearInvoices]) => {
+          const uninvoicedForYear = uninvoicedByYear.get(year);
+          const showUninvoiced =
+            uninvoicedForYear &&
+            uninvoicedForYear.revenue > 0 &&
+            (selectedStatus === 'all' || selectedStatus === 'niet gefactureerd');
           const yearRevenue = yearInvoices.reduce((sum, inv) => sum + inv.revenue, 0);
           const yearVat = yearRevenue * VAT_RATE;
           const yearIncomeTax = yearInvoices.reduce((sum, inv) => sum + inv.taxReservation, 0);
@@ -1064,6 +1137,36 @@ export function InvoicesDashboard() {
                         </TableRow>
                       );
                     })}
+                    {showUninvoiced && (
+                      <TableRow className="text-muted-foreground">
+                        <TableCell className="font-medium italic">
+                          {uninvoicedForYear.entryCount} entries
+                        </TableCell>
+                        <TableCell>-</TableCell>
+                        <TableCell>-</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            style={{
+                              borderColor: STATUS_COLORS.default,
+                              backgroundColor: `${STATUS_COLORS.default}20`,
+                              color: STATUS_COLORS.default,
+                            }}
+                          >
+                            Niet gefactureerd
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(uninvoicedForYear.revenue)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(uninvoicedForYear.revenue * VAT_RATE)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(uninvoicedForYear.taxReservation)}
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>

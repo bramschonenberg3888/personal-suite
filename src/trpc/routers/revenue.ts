@@ -488,6 +488,39 @@ export const revenueRouter = createTRPCRouter({
           });
       }),
 
+    uninvoiced: protectedProcedure.query(async ({ ctx }) => {
+      const entries = await ctx.db.revenueEntry.findMany({
+        where: {
+          userId: ctx.userId,
+          invoiceNumber: null,
+          revenue: { not: null },
+        },
+      });
+
+      // Group by year (from work date, not invoice date)
+      const grouped = new Map<
+        number,
+        { revenue: number; taxReservation: number; entryCount: number }
+      >();
+
+      for (const entry of entries) {
+        const year = entry.year ?? 0;
+        const current = grouped.get(year) ?? {
+          revenue: 0,
+          taxReservation: 0,
+          entryCount: 0,
+        };
+        current.revenue += entry.revenue ?? 0;
+        current.taxReservation += entry.taxReservation ?? 0;
+        current.entryCount += 1;
+        grouped.set(year, current);
+      }
+
+      return Array.from(grouped.entries())
+        .map(([year, data]) => ({ year, ...data }))
+        .sort((a, b) => b.year - a.year);
+    }),
+
     invoiceFilterOptions: protectedProcedure.query(async ({ ctx }) => {
       const entries = await ctx.db.revenueEntry.findMany({
         where: { userId: ctx.userId, invoiceNumber: { not: null } },
