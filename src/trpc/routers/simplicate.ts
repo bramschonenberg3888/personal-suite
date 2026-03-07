@@ -377,12 +377,28 @@ export const simplicateRouter = createTRPCRouter({
           continue;
         }
 
-        // Validate entry has required fields
-        if (!entry.hours || !entry.startTime) {
+        // Derive hours from minutes if not set
+        const entryHours = entry.hours ?? (entry.minutes ? entry.minutes / 60 : null);
+        const isKilometersOnly =
+          entry.type === 'Kilometers' && !entryHours && entry.kilometers && entry.kilometers > 0;
+
+        // Validate entry has required fields (unless it's a kilometers-only entry)
+        if (!isKilometersOnly && (!entryHours || !entry.startTime)) {
           results.push({
             entryId: entry.id,
             success: false,
-            error: 'Entry missing hours or start time',
+            error: `Entry missing ${!entryHours ? 'hours' : 'start time'}`,
+          });
+          continue;
+        }
+
+        // Resolve a date for the entry (startTime, or invoiceDate as fallback)
+        const entryDate = entry.startTime ?? entry.invoiceDate;
+        if (!entryDate) {
+          results.push({
+            entryId: entry.id,
+            success: false,
+            error: 'Entry missing date (start time or invoice date)',
           });
           continue;
         }
@@ -400,36 +416,59 @@ export const simplicateRouter = createTRPCRouter({
         }
 
         try {
-          // Push hours entry
-          const simplicateEntry = transformToSimplicateHours(
-            {
-              hours: entry.hours,
-              startTime: entry.startTime,
-              description: entry.description,
-              billable: entry.billable,
-            },
-            {
-              employeeId: connection.employeeId,
-              projectId: projectMapping.projectId,
-              projectServiceId: projectMapping.serviceId ?? undefined,
-              hourTypeId: connection.hoursTypeId,
-            }
-          );
+          // Resolve project service: use mapped service, or auto-find one for the entry date
+          let serviceId = projectMapping.serviceId ?? undefined;
+          if (!serviceId) {
+            const dateStr = entryDate.toISOString().split('T')[0];
+            const service = await client.findServiceForDate(projectMapping.projectId, dateStr);
+            serviceId = service?.id;
+          }
 
-          const simplicateId = await client.postHours(simplicateEntry);
+          const dateStr = entryDate.toISOString().split('T')[0];
+          let simplicateId: string;
 
-          // Push mileage if the entry has kilometers
-          if (entry.kilometers && entry.kilometers > 0) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            await client.postMileage({
+          if (isKilometersOnly) {
+            // Push mileage only (no hours entry)
+            simplicateId = await client.postMileage({
               employee_id: connection.employeeId,
               project_id: projectMapping.projectId,
-              projectservice_id: projectMapping.serviceId ?? undefined,
-              mileage: entry.kilometers,
-              start_date: entry.startTime.toISOString().split('T')[0],
+              projectservice_id: serviceId,
+              mileage: entry.kilometers!,
+              start_date: dateStr,
               note: entry.description ?? undefined,
-              related_hours_id: simplicateId,
             });
+          } else {
+            // Push hours entry
+            const simplicateEntry = transformToSimplicateHours(
+              {
+                hours: entryHours!,
+                startTime: entryDate,
+                description: entry.description,
+                billable: entry.billable,
+              },
+              {
+                employeeId: connection.employeeId,
+                projectId: projectMapping.projectId,
+                projectServiceId: serviceId,
+                hourTypeId: connection.hoursTypeId,
+              }
+            );
+
+            simplicateId = await client.postHours(simplicateEntry);
+
+            // Push mileage if the entry also has kilometers
+            if (entry.kilometers && entry.kilometers > 0) {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+              await client.postMileage({
+                employee_id: connection.employeeId,
+                project_id: projectMapping.projectId,
+                projectservice_id: serviceId,
+                mileage: entry.kilometers,
+                start_date: dateStr,
+                note: entry.description ?? undefined,
+                related_hours_id: simplicateId,
+              });
+            }
           }
 
           // Update entry with Simplicate ID

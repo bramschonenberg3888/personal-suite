@@ -188,6 +188,28 @@ class SimplicateClient {
   }
 
   /**
+   * Find a valid project service for a given date.
+   * Checks start_date/end_date ranges and returns the first match.
+   */
+  async findServiceForDate(
+    projectId: string,
+    date: string
+  ): Promise<SimplicateProjectService | null> {
+    const services = await this.getProjectServices(projectId);
+    if (services.length === 0) return null;
+    if (services.length === 1) return services[0];
+
+    // Find a service whose date range covers the entry date
+    const matching = services.find((s) => {
+      if (s.start_date && date < s.start_date) return false;
+      if (s.end_date && date > s.end_date) return false;
+      return true;
+    });
+
+    return matching ?? services[0];
+  }
+
+  /**
    * Get all hour types
    */
   async getHourTypes(): Promise<SimplicateHourType[]> {
