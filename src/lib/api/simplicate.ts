@@ -232,7 +232,7 @@ class SimplicateClient {
    * Post mileage to Simplicate
    */
   async postMileage(entry: SimplicateMileageEntry): Promise<string> {
-    const response = await this.request<SimplicateHoursResponse>('/hours/mileage', {
+    const response = await this.request<SimplicateHoursResponse>('/mileage/mileage', {
       method: 'POST',
       body: JSON.stringify(entry),
     });
