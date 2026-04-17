@@ -34,6 +34,7 @@ interface InteractiveMetricsChartProps {
   startDate?: Date;
   endDate?: Date;
   clients?: string[];
+  billable?: boolean;
 }
 
 type ChartType = 'area' | 'line' | 'bar';
@@ -116,6 +117,7 @@ export function InteractiveMetricsChart({
   startDate,
   endDate,
   clients,
+  billable,
 }: InteractiveMetricsChartProps) {
   // Chart configuration state (persisted)
   const [chartType, setChartType] = usePersistedState<ChartType>(
@@ -128,10 +130,6 @@ export function InteractiveMetricsChart({
     'month'
   );
   const [cumulative, setCumulative] = usePersistedState('finance.revenue.chart.cumulative', false);
-  const [billableOnly, setBillableOnly] = usePersistedState(
-    'finance.revenue.chart.billableOnly',
-    false
-  );
   const [movingAverage, setMovingAverage] = usePersistedState<MovingAverage>(
     'finance.revenue.chart.movingAverage',
     0
@@ -153,7 +151,7 @@ export function InteractiveMetricsChart({
     startDate,
     endDate,
     clients,
-    billable: billableOnly ? true : undefined,
+    billable,
   });
 
   // Generate all periods for the date range
@@ -781,13 +779,6 @@ export function InteractiveMetricsChart({
             <Switch id="cumulative" checked={cumulative} onCheckedChange={setCumulative} />
             <Label htmlFor="cumulative" className="text-sm">
               Cumulative
-            </Label>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Switch id="billable" checked={billableOnly} onCheckedChange={setBillableOnly} />
-            <Label htmlFor="billable" className="text-sm">
-              Billable only
             </Label>
           </div>
 

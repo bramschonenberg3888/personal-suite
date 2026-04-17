@@ -183,6 +183,7 @@ export const revenueRouter = createTRPCRouter({
             endDate: z.date().optional(),
             clients: z.array(z.string()).optional(),
             types: z.array(z.string()).optional(),
+            billable: z.boolean().optional(),
           })
           .optional()
       )
@@ -203,6 +204,10 @@ export const revenueRouter = createTRPCRouter({
 
         if (input?.types && input.types.length > 0) {
           where.type = { in: input.types };
+        }
+
+        if (input?.billable !== undefined) {
+          where.billable = input.billable;
         }
 
         const entries = await ctx.db.revenueEntry.findMany({ where });
@@ -313,6 +318,7 @@ export const revenueRouter = createTRPCRouter({
             startDate: z.date().optional(),
             endDate: z.date().optional(),
             clients: z.array(z.string()).optional(),
+            billable: z.boolean().optional(),
           })
           .optional()
       )
@@ -330,6 +336,10 @@ export const revenueRouter = createTRPCRouter({
 
         if (input?.clients && input.clients.length > 0) {
           where.client = { in: input.clients };
+        }
+
+        if (input?.billable !== undefined) {
+          where.billable = input.billable;
         }
 
         const entries = await ctx.db.revenueEntry.findMany({ where });
@@ -359,6 +369,7 @@ export const revenueRouter = createTRPCRouter({
             startDate: z.date().optional(),
             endDate: z.date().optional(),
             clients: z.array(z.string()).optional(),
+            billable: z.boolean().optional(),
           })
           .optional()
       )
@@ -376,6 +387,10 @@ export const revenueRouter = createTRPCRouter({
 
         if (input?.clients && input.clients.length > 0) {
           where.client = { in: input.clients };
+        }
+
+        if (input?.billable !== undefined) {
+          where.billable = input.billable;
         }
 
         const entries = await ctx.db.revenueEntry.findMany({ where });
@@ -617,6 +632,7 @@ export const revenueRouter = createTRPCRouter({
             where: {
               userId: ctx.userId,
               year: input.year,
+              billable: true,
             },
           }),
         ]);

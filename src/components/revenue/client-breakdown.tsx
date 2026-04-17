@@ -9,6 +9,7 @@ interface ClientBreakdownProps {
   startDate?: Date;
   endDate?: Date;
   clients?: string[];
+  billable?: boolean;
 }
 
 function formatCurrency(value: number): string {
@@ -32,11 +33,12 @@ const COLORS = [
   '#84cc16',
 ];
 
-export function ClientBreakdown({ startDate, endDate, clients }: ClientBreakdownProps) {
+export function ClientBreakdown({ startDate, endDate, clients, billable }: ClientBreakdownProps) {
   const { data, isLoading } = trpc.revenue.entries.byClient.useQuery({
     startDate,
     endDate,
     clients,
+    billable,
   });
 
   const chartData = (data ?? []).map((item, index) => ({

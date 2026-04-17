@@ -64,6 +64,17 @@ export function RevenueDashboard() {
     'all'
   );
   const [selectedWeek, setSelectedWeek] = usePersistedState('finance.revenue.selectedWeek', 'all');
+  const [selectedBillable, setSelectedBillable] = usePersistedState(
+    'finance.revenue.selectedBillable',
+    'all'
+  );
+
+  const billableFilter =
+    selectedBillable === 'billable'
+      ? true
+      : selectedBillable === 'non-billable'
+        ? false
+        : undefined;
 
   const utils = trpc.useUtils();
   const { data: connection, isLoading: connectionLoading } = trpc.revenue.connection.get.useQuery();
@@ -164,6 +175,7 @@ export function RevenueDashboard() {
       startDate: effectiveDateRange.from,
       endDate: effectiveDateRange.to,
       clients: selectedClients.length > 0 ? selectedClients : undefined,
+      billable: billableFilter,
     },
     { enabled: !!connection }
   );
@@ -186,6 +198,7 @@ export function RevenueDashboard() {
     setSelectedQuarter('all');
     setSelectedMonth('all');
     setSelectedWeek('all');
+    setSelectedBillable('all');
   };
 
   const hasFilters =
@@ -195,7 +208,8 @@ export function RevenueDashboard() {
     selectedYear !== 'all' ||
     selectedQuarter !== 'all' ||
     selectedMonth !== 'all' ||
-    selectedWeek !== 'all';
+    selectedWeek !== 'all' ||
+    selectedBillable !== 'all';
 
   const monthNames = [
     'January',
@@ -390,6 +404,20 @@ export function RevenueDashboard() {
             )}
 
             <div>
+              <label className="mb-1 block text-sm font-medium">Billable</label>
+              <Select value={selectedBillable} onValueChange={setSelectedBillable}>
+                <SelectTrigger className="w-44">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="billable">Billable only</SelectItem>
+                  <SelectItem value="non-billable">Non-billable only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <label className="mb-1 block text-sm font-medium">From</label>
               <Input
                 type="date"
@@ -444,6 +472,7 @@ export function RevenueDashboard() {
         startDate={effectiveDateRange.from}
         endDate={effectiveDateRange.to}
         clients={selectedClients.length > 0 ? selectedClients : undefined}
+        billable={billableFilter}
       />
 
       {/* KPI Cards */}
@@ -454,6 +483,7 @@ export function RevenueDashboard() {
         startDate={effectiveDateRange.from}
         endDate={effectiveDateRange.to}
         clients={selectedClients.length > 0 ? selectedClients : undefined}
+        billable={billableFilter}
       />
     </div>
   );
