@@ -50,11 +50,19 @@ export function InvoiceUploadDialog({ onSuccess }: InvoiceUploadDialogProps) {
     },
   });
 
+  const resetState = useCallback(() => {
+    setState('idle');
+    setParsedData(null);
+    setError(null);
+    setIsDragging(false);
+  }, []);
+
   const confirmMutation = trpc.invoiceUpload.confirm.useMutation({
     onSuccess: () => {
       setState('success');
       setTimeout(() => {
         setOpen(false);
+        resetState();
         onSuccess?.();
       }, 2000);
     },
@@ -63,13 +71,6 @@ export function InvoiceUploadDialog({ onSuccess }: InvoiceUploadDialogProps) {
       setState('preview');
     },
   });
-
-  const resetState = useCallback(() => {
-    setState('idle');
-    setParsedData(null);
-    setError(null);
-    setIsDragging(false);
-  }, []);
 
   const processFile = useCallback(
     (file: File) => {
@@ -227,7 +228,14 @@ export function InvoiceUploadDialog({ onSuccess }: InvoiceUploadDialogProps) {
           <div className="flex flex-col items-center justify-center py-8">
             <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
             <p className="mt-3 font-medium">Invoice created successfully!</p>
-            <Button variant="ghost" className="mt-4" onClick={() => setOpen(false)}>
+            <Button
+              variant="ghost"
+              className="mt-4"
+              onClick={() => {
+                setOpen(false);
+                resetState();
+              }}
+            >
               Close
             </Button>
           </div>

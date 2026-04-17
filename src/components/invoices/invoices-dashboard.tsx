@@ -1096,6 +1096,7 @@ export function InvoicesDashboard() {
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Amount (excl. VAT)</TableHead>
                       <TableHead className="text-right">VAT</TableHead>
+                      <TableHead className="text-right">Amount (incl. VAT)</TableHead>
                       <TableHead className="text-right">Income Tax</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1132,6 +1133,9 @@ export function InvoicesDashboard() {
                           </TableCell>
                           <TableCell className="text-right">{formatCurrency(vat)}</TableCell>
                           <TableCell className="text-right">
+                            {formatCurrency(invoice.revenue + vat)}
+                          </TableCell>
+                          <TableCell className="text-right">
                             {formatCurrency(invoice.taxReservation)}
                           </TableCell>
                         </TableRow>
@@ -1161,6 +1165,9 @@ export function InvoicesDashboard() {
                         </TableCell>
                         <TableCell className="text-right">
                           {formatCurrency(uninvoicedForYear.revenue * VAT_RATE)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(uninvoicedForYear.revenue * (1 + VAT_RATE))}
                         </TableCell>
                         <TableCell className="text-right">
                           {formatCurrency(uninvoicedForYear.taxReservation)}
