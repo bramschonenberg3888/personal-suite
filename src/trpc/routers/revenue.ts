@@ -551,6 +551,39 @@ export const revenueRouter = createTRPCRouter({
 
       return { statuses: statuses.sort(), clientTypes: clientTypes.sort() };
     }),
+
+    btwByQuarter: protectedProcedure.query(async ({ ctx }) => {
+      const entries = await ctx.db.revenueEntry.findMany({
+        where: {
+          userId: ctx.userId,
+          invoiceDate: { not: null },
+          revenue: { gt: 0 },
+        },
+        select: { invoiceDate: true, revenue: true },
+        orderBy: { invoiceDate: 'asc' },
+      });
+
+      const grouped = new Map<string, { year: number; quarter: string; revenue: number }>();
+
+      for (const entry of entries) {
+        const date = new Date(entry.invoiceDate!);
+        const year = date.getFullYear();
+        const quarter = `Q${Math.ceil((date.getMonth() + 1) / 3)}`;
+        const key = `${year} ${quarter}`;
+
+        const current = grouped.get(key) ?? { year, quarter, revenue: 0 };
+        current.revenue += entry.revenue ?? 0;
+        grouped.set(key, current);
+      }
+
+      const data = Array.from(grouped.values()).sort((a, b) =>
+        a.year !== b.year ? a.year - b.year : a.quarter.localeCompare(b.quarter)
+      );
+
+      const years = [...new Set(data.map((d) => d.year))].sort((a, b) => b - a);
+
+      return { data, years };
+    }),
   }),
 
   // Target management

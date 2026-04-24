@@ -327,5 +327,52 @@ export const costsRouter = createTRPCRouter({
         years: years.sort((a, b) => b - a),
       };
     }),
+
+    btwByQuarter: protectedProcedure.query(async ({ ctx }) => {
+      const entries = await ctx.db.costEntry.findMany({
+        where: { userId: ctx.userId },
+        select: { year: true, quarter: true, vatSection: true, amountExclVat: true, vat: true },
+        orderBy: [{ year: 'asc' }, { invoiceDate: 'asc' }],
+      });
+
+      const grouped = new Map<
+        string,
+        {
+          year: number;
+          quarter: string;
+          regularVat: number;
+          section4aAmount: number;
+          section4aVat: number;
+        }
+      >();
+
+      for (const entry of entries) {
+        if (!entry.year || !entry.quarter) continue;
+        const key = `${entry.year} ${entry.quarter}`;
+        const current = grouped.get(key) ?? {
+          year: entry.year,
+          quarter: entry.quarter,
+          regularVat: 0,
+          section4aAmount: 0,
+          section4aVat: 0,
+        };
+
+        const amount = entry.amountExclVat ?? 0;
+        const storedVat = entry.vat ?? 0;
+
+        if (entry.vatSection?.startsWith('4a')) {
+          current.section4aAmount += amount;
+          current.section4aVat += storedVat > 0 ? storedVat : amount * 0.21;
+        } else {
+          current.regularVat += storedVat;
+        }
+
+        grouped.set(key, current);
+      }
+
+      return Array.from(grouped.values()).sort((a, b) =>
+        a.year !== b.year ? a.year - b.year : a.quarter.localeCompare(b.quarter)
+      );
+    }),
   }),
 });

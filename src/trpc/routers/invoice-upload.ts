@@ -40,6 +40,7 @@ export const invoiceUploadRouter = createTRPCRouter({
         invoiceDate: parsedInvoiceSchema.shape.invoiceDate,
         description: parsedInvoiceSchema.shape.description,
         vatRemarks: parsedInvoiceSchema.shape.vatRemarks,
+        vatSection: parsedInvoiceSchema.shape.vatSection,
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -62,6 +63,7 @@ export const invoiceUploadRouter = createTRPCRouter({
         invoiceDate: input.invoiceDate,
         description: input.description ?? undefined,
         vatRemarks: input.vatRemarks ?? undefined,
+        vatSection: input.vatSection ?? undefined,
       });
 
       // Create local CostEntry for immediate display
@@ -80,6 +82,7 @@ export const invoiceUploadRouter = createTRPCRouter({
           quarter,
           description: input.description,
           vatRemarks: input.vatRemarks,
+          vatSection: input.vatSection,
         },
       });
 

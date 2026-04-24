@@ -10,7 +10,8 @@ import { SimplicateSettings } from '@/components/simplicate/simplicate-settings'
 import { NotionRevenueSettings } from '@/components/revenue/notion-settings-dialog';
 import { NotionCostsSettings } from '@/components/costs/costs-settings-dialog';
 import { TimeEntriesList } from '@/components/revenue/time-entries-list';
-import { DollarSign, Receipt, Settings } from 'lucide-react';
+import { BtwDashboard } from '@/components/finance/btw-dashboard';
+import { DollarSign, Receipt, Settings, FileText } from 'lucide-react';
 import { usePersistedState } from '@/hooks/use-persisted-state';
 
 export function FinanceContent() {
@@ -45,6 +46,10 @@ export function FinanceContent() {
             <TabsTrigger value="costs" className="gap-2">
               <Receipt className="h-4 w-4" />
               Costs
+            </TabsTrigger>
+            <TabsTrigger value="btw" className="gap-2">
+              <FileText className="h-4 w-4" />
+              BTW
             </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2">
               <Settings className="h-4 w-4" />
@@ -81,6 +86,10 @@ export function FinanceContent() {
 
           <TabsContent value="costs">
             <CostsDashboard />
+          </TabsContent>
+
+          <TabsContent value="btw">
+            <BtwDashboard />
           </TabsContent>
 
           <TabsContent value="settings">

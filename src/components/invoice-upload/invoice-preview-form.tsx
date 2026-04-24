@@ -7,6 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface InvoicePreviewFormProps {
   data: {
@@ -16,6 +23,7 @@ interface InvoicePreviewFormProps {
     invoiceDate: string;
     description?: string;
     vatRemarks?: string;
+    vatSection?: string;
     confidence: number;
   };
   onConfirm: (_data: {
@@ -25,6 +33,7 @@ interface InvoicePreviewFormProps {
     invoiceDate: string;
     description?: string;
     vatRemarks?: string;
+    vatSection?: string;
   }) => void;
   onCancel: () => void;
   isSubmitting: boolean;
@@ -42,6 +51,7 @@ export function InvoicePreviewForm({
   const [invoiceDate, setInvoiceDate] = useState(data.invoiceDate);
   const [description, setDescription] = useState(data.description ?? '');
   const [vatRemarks, setVatRemarks] = useState(data.vatRemarks ?? '');
+  const [vatSection, setVatSection] = useState(data.vatSection ?? '');
 
   const total = amountExclVat + vat;
 
@@ -53,6 +63,7 @@ export function InvoicePreviewForm({
       invoiceDate,
       description: description || undefined,
       vatRemarks: vatRemarks || undefined,
+      vatSection: vatSection || undefined,
     });
   };
 
@@ -136,6 +147,19 @@ export function InvoicePreviewForm({
             onChange={(e) => setVatRemarks(e.target.value)}
             rows={2}
           />
+        </div>
+
+        <div>
+          <Label htmlFor="vatSection">BTW Sectie</Label>
+          <Select value={vatSection} onValueChange={setVatSection}>
+            <SelectTrigger id="vatSection">
+              <SelectValue placeholder="Kies sectie..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="4a">4a – Buiten EU (verleggingsregeling)</SelectItem>
+              <SelectItem value="5b Voorbelasting">5b Voorbelasting</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

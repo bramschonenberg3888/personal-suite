@@ -29,6 +29,7 @@ interface ParsedData {
   invoiceDate: string;
   description?: string;
   vatRemarks?: string;
+  vatSection?: string;
   confidence: number;
 }
 
@@ -144,6 +145,7 @@ export function InvoiceUploadDialog({ onSuccess }: InvoiceUploadDialogProps) {
       invoiceDate: string;
       description?: string;
       vatRemarks?: string;
+      vatSection?: string;
     }) => {
       setState('confirming');
       confirmMutation.mutate(data);

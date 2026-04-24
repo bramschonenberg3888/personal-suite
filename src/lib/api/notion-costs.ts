@@ -186,6 +186,7 @@ export interface CreateCostInput {
   invoiceDate: string;
   description?: string;
   vatRemarks?: string;
+  vatSection?: string;
 }
 
 export async function createCostEntryInNotion(
@@ -210,6 +211,10 @@ export async function createCostEntryInNotion(
     properties['Opmerkingen BTW aangifte'] = {
       rich_text: [{ text: { content: input.vatRemarks } }],
     };
+  }
+
+  if (input.vatSection && writable.has('Sectie BTW aangifte')) {
+    properties['Sectie BTW aangifte'] = { select: { name: input.vatSection } };
   }
 
   const page = await notion.pages.create({
